@@ -1,0 +1,34 @@
+# ─── Rust / Tauri ───
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# ─── Node.js ───
+node_modules/
+dist/
+
+# ─── 系统文件 ───
+.DS_Store
+Thumbs.db
+
+# ─── IDE ───
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── 构建产物 ───
+*.dmg
+*.msi
+*.app
+
+# ─── AI agent 工作文件（含个人信息，不提交）───
+findings.md
+task_plan.md
+progress.md
+
+# ─── 工具临时文件 ───
+.playwright-cli/
+
+# ─── 设计/计划文档（工作文件，不进公开仓库）───
+docs/

@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pic2WebP</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23e8792c'/%3E%3Cstop offset='100%25' stop-color='%23d45a0a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='50' y='50' width='412' height='412' rx='90' fill='url(%23bg)'/%3E%3Cg transform='translate(50,50) scale(0.8047)'%3E%3Crect x='120' y='96' width='160' height='210' rx='20' fill='white' opacity='0.28'/%3E%3Crect x='232' y='178' width='160' height='210' rx='20' fill='white'/%3E%3Cpath d='M168 306 L168 220 M168 220 L148 244 M168 220 L188 244' fill='none' stroke='white' stroke-width='18' stroke-linecap='round' stroke-linejoin='round' opacity='0.9'/%3E%3Cpath d='M266 296 L292 322 L346 262' fill='none' stroke='%2316a34a' stroke-width='22' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/g%3E%3C/svg%3E" />
+  <style>
+/* ───────── Reset & Base ───────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f8f8fa;
+  --surface: #ffffff;
+  --band: #f0f0f4;
+  --border: #e4e4ec;
+  --text: #1a1a2e;
+  --text2: #5e5e72;
+  --text3: #9999a8;
+  --primary: #e8792c;
+  --primary-hover: #d45a0a;
+  --primary-light: #fef3ec;
+  --success: #16a34a;
+  --success-light: #f0fdf4;
+  --warning: #f59e0b;
+  --warning-light: #fffbeb;
+  --danger: #dc2626;
+  --danger-light: #fef2f2;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 3px rgba(26,26,46,.04), 0 1px 2px rgba(26,26,46,.06);
+  --shadow-md: 0 4px 12px rgba(26,26,46,.06), 0 2px 4px rgba(26,26,46,.04);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+html, body {
+  height: 100%;
+  font: 13px/1.55 var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ───────── Header ───────── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-text h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 500;
+}
+
+/* ───────── Main Layout ───────── */
+.main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.left-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.right-panel {
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 12px;
+  background: var(--band);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+}
+
+/* ───────── Drop Zone ───────── */
+.dropzone {
+  border: 2px dashed #d4d4dc;
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s ease;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.dropzone:hover,
+.dropzone.dragover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.dropzone.dragover {
+  transform: scale(1.005);
+}
+
+.dropzone-icon {
+  margin-bottom: 6px;
+  transition: transform .2s ease;
+}
+
+.dropzone:hover .dropzone-icon {
+  transform: translateY(-2px);
+}
+
+.dropzone-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.dropzone-hint {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+/* ───────── File List ───────── */
+.file-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 2px 6px;
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 500;
+}
+
+.file-count-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  margin-right: 6px;
+}
+
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 12px;
+  margin: 0 -2px;
+}
+
+.empty-state {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px 22px 22px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.empty-state-icon {
+  margin-bottom: 10px;
+  opacity: 0.4;
+}
+
+.empty-state p {
+  font-weight: 600;
+  font-size: 13.5px;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.empty-state .info-section {
+  margin-top: 16px;
+}
+
+.empty-state .info-section:first-child {
+  margin-top: 0;
+}
+
+.empty-state ul {
+  list-style: none;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 2;
+}
+
+.empty-state ul li::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--primary);
+  margin-right: 8px;
+  vertical-align: middle;
+  opacity: 0.6;
+}
+
+/* Per-file card */
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  transition: box-shadow .15s;
+}
+
+.file-item:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.file-thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--bg);
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.file-size {
+  font-size: 11px;
+  color: var(--text2);
+  font-family: var(--mono);
+  margin-top: 1px;
+}
+
+.file-status {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.status-pending { color: var(--text3); background: var(--bg); }
+.status-compressing { color: #b45309; background: #fffbeb; }
+.status-converting { color: #1d4ed8; background: #eff6ff; }
+.status-done { color: var(--success); background: var(--success-light); }
+.status-skipped { color: var(--text3); background: var(--bg); border: 1px dashed var(--border); }
+.status-failed { color: var(--danger); background: var(--danger-light); }
+
+/* ───────── Controls ───────── */
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.section-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text3);
+}
+
+.quality-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.quality-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text2);
+}
+
+.quality-value {
+  font-weight: 700;
+  color: var(--primary);
+  font-family: var(--mono);
+  font-size: 15px;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slider-end {
+  font-size: 9.5px;
+  color: var(--text3);
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+input[type="range"].quality-slider {
+  flex: 1;
+  accent-color: var(--primary);
+  height: 5px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+/* Toggle */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.toggle-row input { display: none; }
+
+.toggle-track {
+  width: 32px;
+  height: 18px;
+  background: #d4d4dc;
+  border-radius: 9px;
+  position: relative;
+  transition: background .2s ease;
+  flex-shrink: 0;
+}
+
+.toggle-row input:checked + .toggle-track {
+  background: var(--primary);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  transition: transform .2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+
+.toggle-row input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(14px);
+}
+
+/* Pill button group (naming mode) */
+.pill-group {
+  display: flex;
+  gap: 3px;
+}
+
+.pill-btn {
+  flex: 1;
+  padding: 3px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 10px;
+  font-family: var(--font);
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text2);
+  transition: all .12s;
+  text-align: center;
+}
+
+.pill-btn:hover {
+  background: var(--bg);
+  border-color: #c8c8d4;
+}
+
+.pill-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.dir-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dir-input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  font-size: 10px;
+  background: var(--surface);
+  color: var(--text2);
+  font-family: var(--mono);
+  cursor: default;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2px 0;
+}
+
+.hint {
+  font-size: 10px;
+  color: var(--text3);
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.hint.warn {
+  color: #b45309;
+  background: #fffbeb;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid #fde68a;
+}
+
+/* Stats — compact single-row */
+.stats-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.stats-panel[hidden] { display: none; }
+
+.stats-panel.pulse {
+  animation: statsPulse 1s ease;
+}
+
+@keyframes statsPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(22,163,74,.3); }
+  50% { transform: scale(1.03); box-shadow: 0 0 0 6px rgba(22,163,74,0); }
+  100% { transform: scale(1); }
+}
+
+.stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.stat-num {
+  font-weight: 700;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+.stat-num.stat-fail { color: var(--danger); }
+.stat-lbl { font-size: 9px; color: var(--text3); font-weight: 500; }
+
+.stat-saved {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+.stat-saved-val {
+  font-weight: 700;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--success);
+}
+.stat-saved-lbl { font-size: 9px; color: var(--text3); font-weight: 500; }
+
+/* ───────── Buttons ───────── */
+.btn-primary {
+  width: 100%;
+  padding: 9px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all .15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 6px rgba(232,121,44,.2);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  box-shadow: 0 3px 10px rgba(232,121,44,.28);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(232,121,44,.18);
+}
+
+.btn-primary:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 10px;
+  font-family: var(--font);
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text);
+  transition: all .15s;
+  line-height: 1.4;
+}
+
+.btn-secondary:hover {
+  background: var(--bg);
+  border-color: #c8c8d4;
+}
+
+.btn-secondary.primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.btn-secondary.primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.btn-text {
+  border: none;
+  background: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font);
+  font-weight: 500;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color .15s;
+}
+
+.btn-text:hover { color: var(--primary); background: var(--primary-light); }
+
+/* Donate — subtle text link */
+.btn-donate {
+  width: 100%;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--text3);
+  font-size: 10.5px;
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color .15s;
+}
+
+.btn-donate:hover {
+  color: var(--primary);
+}
+
+/* ───────── Modal ───────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26,26,46,.25);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-overlay.visible {
+  display: flex;
+}
+
+.modal {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 28px 32px;
+  width: 360px;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(26,26,46,.12), 0 4px 16px rgba(26,26,46,.08);
+}
+
+.modal-close {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  border: none;
+  background: var(--bg);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 16px;
+  color: var(--text3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+  font-weight: 500;
+}
+
+.modal-close:hover {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.modal h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  letter-spacing: -0.02em;
+}
+
+.modal-hint { font-size: 13px; color: var(--text3); margin-bottom: 18px; }
+
+.qr-row { display: flex; gap: 18px; justify-content: center; }
+
+.qr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.qr-card img {
+  width: 120px;
+  height: 120px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.qr-card span { font-size: 12px; color: var(--text2); font-weight: 500; }
+
+/* ───────── Scrollbar ───────── */
+.file-list::-webkit-scrollbar { width: 5px; }
+.file-list::-webkit-scrollbar-thumb { background: #d0d0da; border-radius: 3px; }
+.file-list::-webkit-scrollbar-track { background: transparent; }
+
+/* ───────── Spinner ───────── */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,.25);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ───────── Blog link — subtle bottom-left ───────── */
+.blog-link {
+  font-size: 9px;
+  color: var(--text3);
+  text-decoration: none;
+  opacity: .5;
+  transition: opacity .15s, color .15s;
+  padding: 4px 4px 2px;
+  flex-shrink: 0;
+}
+
+.blog-link:hover {
+  opacity: 1;
+  color: var(--primary);
+}
+
+/* ───────── Language toggle ───────── */
+.lang-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+
+.lang-toggle:hover {
+  border-color: var(--primary);
+}
+
+.lang-toggle span {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 16px;
+  color: var(--text3);
+  transition: all .15s;
+  letter-spacing: 0.02em;
+}
+
+.lang-toggle span.active {
+  background: var(--primary);
+  color: white;
+}
+.btn-primary.cancel-mode {
+  background: var(--danger);
+  box-shadow: 0 2px 6px rgba(220,38,38,.2);
+}
+.btn-primary.cancel-mode:hover {
+  background: #b91c1c;
+  box-shadow: 0 3px 10px rgba(220,38,38,.28);
+}
+
+.retry-btn {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all .15s;
+}
+.retry-btn:hover {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- ===== Header ===== -->
+    <header>
+      <div class="logo">
+        <svg width="28" height="28" viewBox="0 0 512 512" fill="none">
+          <defs>
+            <linearGradient id="headerLogoBg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#e8792c"/>
+              <stop offset="100%" stop-color="#d45a0a"/>
+            </linearGradient>
+          </defs>
+          <rect x="50" y="50" width="412" height="412" rx="90" fill="url(#headerLogoBg)"/>
+          <g transform="translate(50,50) scale(0.8047)">
+            <rect x="120" y="96" width="160" height="210" rx="20" fill="white" opacity="0.28"/>
+            <rect x="232" y="178" width="160" height="210" rx="20" fill="white"/>
+            <path d="M168 306 L168 220 M168 220 L148 244 M168 220 L188 244" fill="none" stroke="white" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+            <path d="M266 296 L292 322 L346 262" fill="none" stroke="#16a34a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+        </svg>
+        <div class="logo-text">
+          <h1>Pic2WebP</h1>
+          <span class="subtitle" data-i18n="subtitle">图片转 WebP · 免费 · 本地处理</span>
+        </div>
+      </div>
+      <div class="lang-toggle" id="lang-toggle">
+        <span id="lang-zh" class="active">中</span>
+        <span id="lang-en">EN</span>
+      </div>
+    </header>
+
+    <!-- ===== Main layout ===== -->
+    <div class="main-layout">
+      <!-- ===== Left: Drop zone + File list ===== -->
+      <section class="left-panel">
+        <!-- Drop zone -->
+        <div id="dropzone" class="dropzone">
+          <div class="dropzone-content">
+            <div class="dropzone-icon">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#b0b0bc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <p class="dropzone-text" data-i18n="dropzone-text">拖拽图片到此处</p>
+            <p class="dropzone-hint" data-i18n="dropzone-hint">或点击选择文件 · 支持 JPG / PNG / WebP / AVIF</p>
+          </div>
+        </div>
+
+        <!-- File list -->
+        <div class="file-list-header">
+          <span><span class="file-count-dot"></span><span id="file-count-text" data-i18n="file-count" data-i18n-params='{"n":0}'>已选择 0 个文件</span></span>
+          <button id="clear-btn" class="btn-text" hidden data-i18n="clear">清空</button>
+        </div>
+        <div class="hint warn" id="folder-hint" hidden data-i18n="folder-hint">检测到文件夹，但未开启递归子目录。勾选「递归子目录」以处理其中的图片。</div>
+        <div id="file-list" class="file-list">
+          <div class="empty-state">
+            <div class="info-section">
+              <p data-i18n="why-webp">为什么要用 WebP？</p>
+              <ul>
+                <li data-i18n="why-1">Google 开发的现代图片格式</li>
+                <li data-i18n="why-2">同等画质体积减少 25-50%</li>
+                <li data-i18n="why-3">支持透明通道，替代 PNG</li>
+                <li data-i18n="why-4">Chrome / Edge / Firefox / Safari 全兼容</li>
+              </ul>
+            </div>
+            <div class="info-section">
+              <p data-i18n="how-title">如何实现？</p>
+              <ul>
+                <li data-i18n="how-1">内置 WebP 编码引擎，无需安装任何工具</li>
+                <li data-i18n="how-2">可选 jpegoptim / pngquant 预压缩，进一步减小体积</li>
+                <li data-i18n="how-3">所有处理本地完成，不上传任何文件</li>
+                <li data-i18n="how-4">转换后自动统计节省空间</li>
+              </ul>
+            </div>
+            <div class="info-section">
+              <p data-i18n="tips-title">批量处理提示</p>
+              <ul>
+                <li data-i18n="tips-1">逐张串行转换，批量拖入不会卡顿</li>
+                <li data-i18n="tips-2">单张建议 &lt; 50MB，超大会占用较多内存</li>
+                <li data-i18n="tips-3">建议单次不超过 200 张，更多请分批处理</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <a class="blog-link" id="blog-link" href="https://www.91hym.cn/" data-i18n="blog">博客</a>
+      </section>
+
+      <!-- ===== Right: Controls + Stats ===== -->
+      <section class="right-panel">
+        <!-- Quality -->
+        <div class="panel-section">
+          <div class="section-label" data-i18n="output-quality">输出质量</div>
+          <div class="quality-header">
+            <span class="quality-label" data-i18n="quality">质量</span>
+            <span class="quality-value" id="quality-val">80</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-end" data-i18n="small-file">小文件</span>
+            <input type="range" id="quality-slider" class="quality-slider" min="10" max="100" value="80" />
+            <span class="slider-end" data-i18n="high-quality">高质量</span>
+          </div>
+        </div>
+
+        <!-- Options -->
+        <div class="panel-section">
+          <div class="section-label" data-i18n="convert-options">转换选项</div>
+          <label class="toggle-row">
+            <input type="checkbox" id="chk-recursive" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span data-i18n="recursive">递归子目录</span>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" id="chk-delete" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span data-i18n="delete-source">转换后删除源文件</span>
+          </label>
+          <div class="hint" id="tool-status" hidden></div>
+        </div>
+
+        <!-- Output directory -->
+        <div class="panel-section">
+          <div class="section-label" data-i18n="output-dir">输出目录</div>
+          <div class="dir-row">
+            <input type="text" id="output-dir" class="dir-input" readonly placeholder="与源文件同目录" data-i18n-placeholder="same-dir" />
+            <button id="dir-btn" class="btn-secondary primary" data-i18n="select">选择</button>
+            <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
+          </div>
+        </div>
+
+        <!-- Naming mode — pill buttons -->
+        <div class="panel-section">
+          <div class="section-label" data-i18n="naming-rule">命名规则</div>
+          <div class="pill-group" id="naming-pills">
+            <button class="pill-btn" data-value="overwrite" data-i18n="overwrite">覆盖</button>
+            <button class="pill-btn active" data-value="webp-suffix">-webp</button>
+            <button class="pill-btn" data-value="q-suffix">-q80</button>
+            <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">时间戳</button>
+          </div>
+          <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ 同名 .webp 文件将被直接覆盖，不可恢复</div>
+        </div>
+
+        <!-- Separator -->
+        <hr class="divider" />
+
+        <!-- Stats — compact single row -->
+        <div class="stats-panel" id="stats-panel" hidden>
+          <div class="stat-item">
+            <span class="stat-num" id="stat-success">0</span>
+            <span class="stat-lbl" data-i18n="success">成功</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-num" id="stat-skip">0</span>
+            <span class="stat-lbl" data-i18n="skip">跳过</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-num stat-fail" id="stat-fail">0</span>
+            <span class="stat-lbl" data-i18n="fail">失败</span>
+          </div>
+          <div class="stat-saved">
+            <span class="stat-saved-val" id="stat-saved">—</span>
+            <span class="stat-saved-lbl" data-i18n="saved">节省</span>
+          </div>
+        </div>
+
+        <!-- Convert button -->
+        <button id="convert-btn" class="btn-primary" disabled>
+          <span id="btn-text" data-i18n="start-convert">开始转换</span>
+          <span id="btn-spinner" class="spinner" hidden></span>
+        </button>
+
+        <!-- Donate — subtle text link -->
+        <button id="donate-btn" class="btn-donate" data-i18n="donate-btn">请作者喝杯奶茶 ☕</button>
+      </section>
+    </div>
+
+    <!-- ===== Donate modal ===== -->
+    <div id="donate-modal" class="modal-overlay">
+      <div class="modal">
+        <button id="modal-close" class="modal-close">✕</button>
+        <h2 data-i18n="donate-title">请作者喝杯奶茶 🧋</h2>
+        <p class="modal-hint" data-i18n="donate-hint">如果 Pic2WebP 帮到了你，欢迎随意打赏</p>
+        <div class="qr-row">
+          <div class="qr-card">
+            <img src="/alipay_donate.jpg" alt="支付宝" />
+            <span data-i18n="alipay">支付宝</span>
+          </div>
+          <div class="qr-card">
+            <img src="/wechat_donate.jpg" alt="微信" />
+            <span data-i18n="wechat-pay">微信支付</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

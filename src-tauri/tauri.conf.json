@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicovrc/tauri-settings-schema/refs/heads/v2/schema.json",
+  "productName": "Pic2WebP",
+  "version": "1.5.0",
+  "identifier": "com.danglei.pic2webp",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Pic2WebP",
+        "width": 800,
+        "height": 620,
+        "minWidth": 720,
+        "minHeight": 540,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' asset:; script-src 'self' asset:; style-src 'self' asset: 'unsafe-inline'; img-src 'self' asset: data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "../public/*"
+    ],
+    "windows": {
+      "allowDowngrades": true,
+      "nsis": {
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}
