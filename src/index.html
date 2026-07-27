@@ -805,7 +805,100 @@ input[type="range"].quality-slider {
   color: var(--primary);
   background: var(--primary-light);
 }
-  </style>
+  
+/* ── Dark Mode ── */
+[data-theme="dark"] {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --surface2: #0f3460;
+  --border: #2a2a4a;
+  --text: #e0e0e0;
+  --text2: #a0a0b0;
+  --text3: #707080;
+  --primary: #4a9eff;
+  --primary-light: #1a3a5a;
+  --success: #2ecc71;
+  --skip: #f39c12;
+  --warn: #e74c3c;
+  --shadow: rgba(0,0,0,0.3);
+}
+[data-theme="dark"] .donate-modal { background: rgba(0,0,0,0.7); }
+[data-theme="dark"] .donate-box { background: var(--surface); }
+[data-theme="dark"] .dropzone { background: var(--surface2); }
+
+/* ── Advanced section ── */
+.advanced-toggle {
+  display: flex; align-items: center; gap: 4px;
+  cursor: pointer; user-select: none;
+  font-size: 12px; color: var(--text2);
+  margin-top: 4px;
+}
+.advanced-toggle:hover { color: var(--primary); }
+.advanced-toggle .chevron { transition: transform .2s; display: inline-block; }
+.advanced-toggle.open .chevron { transform: rotate(90deg); }
+.advanced-section { display: none; margin-top: 8px; }
+.advanced-section.open { display: block; }
+.advanced-row {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 6px; flex-wrap: wrap;
+}
+.advanced-row label { font-size: 11px; color: var(--text2); white-space: nowrap; }
+.advanced-row input[type="number"] {
+  width: 60px; padding: 2px 4px; font-size: 11px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text);
+}
+.advanced-row input[type="text"] {
+  width: 120px; padding: 2px 4px; font-size: 11px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text);
+}
+.advanced-row select {
+  padding: 2px 4px; font-size: 11px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text);
+}
+.mini-toggle {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text2); cursor: pointer;
+}
+.mini-toggle input { margin: 0; }
+
+/* ── Dark mode toggle ── */
+.theme-toggle {
+  background: none; border: 1px solid var(--border);
+  border-radius: 6px; padding: 2px 8px;
+  font-size: 14px; cursor: pointer; color: var(--text2);
+}
+.theme-toggle:hover { color: var(--primary); }
+
+/* ── Watch button ── */
+.watch-btn {
+  font-size: 11px; padding: 2px 8px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: none; color: var(--text2); cursor: pointer;
+}
+.watch-btn:hover { color: var(--primary); border-color: var(--primary); }
+.watch-btn.active { color: var(--warn); border-color: var(--warn); }
+
+/* ── Compare modal ── */
+.compare-modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.85);
+}
+.compare-modal.visible { display: flex; }
+.compare-content {
+  max-width: 90vw; max-height: 90vh;
+  display: flex; gap: 16px; padding: 16px;
+}
+.compare-content img {
+  max-width: 45vw; max-height: 80vh; object-fit: contain;
+  border-radius: 8px;
+}
+.compare-label {
+  position: absolute; top: 8px; left: 8px;
+  background: rgba(0,0,0,0.7); color: #fff;
+  padding: 2px 8px; border-radius: 4px; font-size: 12px;
+}
+</style>
 </head>
 <body>
   <div id="app">
@@ -832,7 +925,8 @@ input[type="range"].quality-slider {
           <span class="subtitle" data-i18n="subtitle">图片转 WebP · 免费 · 本地处理</span>
         </div>
       </div>
-      <div class="lang-toggle" id="lang-toggle">
+      <button class="theme-toggle" id="theme-toggle">🌙</button>
+        <div class="lang-toggle" id="lang-toggle">
         <span id="lang-zh" class="active">中</span>
         <span id="lang-en">EN</span>
       </div>
@@ -904,12 +998,15 @@ input[type="range"].quality-slider {
           <div class="quality-header">
             <span class="quality-label" data-i18n="quality">质量</span>
             <span class="quality-value" id="quality-val">80</span>
+            <label class="mini-toggle" style="margin-left:auto"><input type="checkbox" id="chk-lossless" /><span data-i18n="lossless">无损</span></label>
           </div>
           <div class="slider-row">
             <span class="slider-end" data-i18n="small-file">小文件</span>
             <input type="range" id="quality-slider" class="quality-slider" min="10" max="100" value="80" />
             <span class="slider-end" data-i18n="high-quality">高质量</span>
           </div>
+          <label class="mini-toggle" style="margin-top:4px"><input type="checkbox" id="chk-target-size" /><span data-i18n="target-size">目标大小</span></label>
+          <input type="number" id="target-size-input" class="advanced-row input" style="width:60px;display:none" placeholder="KB" min="10" max="10000" value="200" />
         </div>
 
         <!-- Options -->
@@ -936,6 +1033,7 @@ input[type="range"].quality-slider {
             <button id="dir-btn" class="btn-secondary primary" data-i18n="select">选择</button>
             <button id="dir-copy" class="btn-text" hidden title="Copy Path" data-i18n="copy-path">⧉</button>
             <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
+            <button id="watch-btn" class="watch-btn" data-i18n="watch-folder">监控文件夹</button>
           </div>
         </div>
 
@@ -949,6 +1047,44 @@ input[type="range"].quality-slider {
             <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">时间戳</button>
           </div>
           <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ 同名 .webp 文件将被直接覆盖，不可恢复</div>
+        </div>
+
+
+        <!-- Advanced options (collapsible) -->
+        <div class="panel-section">
+          <div class="advanced-toggle" id="advanced-toggle">
+            <span class="chevron">▸</span>
+            <span data-i18n="advanced">高级选项</span>
+          </div>
+          <div class="advanced-section" id="advanced-section">
+            <div class="advanced-row">
+              <label class="mini-toggle"><input type="checkbox" id="chk-resize" /><span data-i18n="resize">缩放</span></label>
+              <label data-i18n="resize-width">宽</label>
+              <input type="number" id="resize-w" placeholder="1920" min="1" max="20000" />
+              <label data-i18n="resize-height">高</label>
+              <input type="number" id="resize-h" placeholder="auto" min="0" max="20000" />
+              <select id="resize-mode">
+                <option value="fit" data-i18n="resize-fit">等比</option>
+                <option value="fill" data-i18n="resize-fill">填充</option>
+                <option value="shrink" data-i18n="resize-shrink">仅缩小</option>
+              </select>
+            </div>
+            <div class="advanced-row">
+              <label data-i18n="output-format">输出格式</label>
+              <select id="output-format">
+                <option value="webp" data-i18n="format-webp">WebP</option>
+                <option value="both" data-i18n="format-both">WebP+AVIF</option>
+              </select>
+            </div>
+            <div class="advanced-row">
+              <label class="mini-toggle"><input type="checkbox" id="chk-watermark" /><span data-i18n="watermark">水印</span></label>
+              <input type="text" id="watermark-text" data-i18n-placeholder="watermark-text" placeholder="水印文字" />
+            </div>
+            <div class="advanced-row">
+              <label class="mini-toggle"><input type="checkbox" id="chk-structure" /><span data-i18n="preserve-structure">保留目录结构</span></label>
+              <label class="mini-toggle" style="margin-left:12px"><input type="checkbox" id="chk-exif" /><span data-i18n="strip-exif">清除 EXIF</span></label>
+            </div>
+          </div>
         </div>
 
         <!-- Separator -->
@@ -1007,5 +1143,11 @@ input[type="range"].quality-slider {
   </div>
 
   <script type="module" src="/app.js"></script>
+
+    <!-- Compare modal -->
+    <div class="compare-modal" id="compare-modal">
+      <div class="compare-content" id="compare-content">
+      </div>
+    </div>
 </body>
 </html>

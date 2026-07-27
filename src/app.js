@@ -46,6 +46,47 @@ const modalClose = $("#modal-close");
 const langToggle = $("#lang-toggle");
 const langZh = $("#lang-zh");
 const langEn = $("#lang-en");
+const themeToggle = $("#theme-toggle");
+const chkLossless = $("#chk-lossless");
+const chkTargetSize = $("#chk-target-size");
+const targetSizeInput = $("#target-size-input");
+const advancedToggle = $("#advanced-toggle");
+const advancedSection = $("#advanced-section");
+const chkResize = $("#chk-resize");
+const resizeW = $("#resize-w");
+const resizeH = $("#resize-h");
+const resizeMode = $("#resize-mode");
+const outputFormat = $("#output-format");
+const chkWatermark = $("#chk-watermark");
+const watermarkText = $("#watermark-text");
+const chkStructure = $("#chk-structure");
+const chkExif = $("#chk-exif");
+const watchBtn = $("#watch-btn");
+const compareModal = $("#compare-modal");
+
+// ─── Build convert request ─────────────────────────────────────────
+function buildRequest(fileList) {
+  return {
+    files: fileList,
+    quality: Math.max(10, Math.min(100, parseInt(qualitySlider.value) || 80)),
+    recursive: chkRecursive.checked,
+    delete_source: chkDelete.checked,
+    naming_mode: namingMode,
+    output_dir: selectedDir || null,
+    lossless: chkLossless ? chkLossless.checked : false,
+    strip_exif: chkExif ? chkExif.checked : false,
+    preserve_structure: chkStructure ? chkStructure.checked : false,
+    target_size_kb: (chkTargetSize && chkTargetSize.checked && targetSizeInput) ? parseInt(targetSizeInput.value) || null : null,
+    output_format: outputFormat ? outputFormat.value : "webp",
+    resize_enabled: chkResize ? chkResize.checked : false,
+    resize_width: resizeW ? (parseInt(resizeW.value) || null) : null,
+    resize_height: resizeH ? (parseInt(resizeH.value) || null) : null,
+    resize_mode: resizeMode ? resizeMode.value : "fit",
+    watermark_text: (chkWatermark && chkWatermark.checked && watermarkText) ? watermarkText.value : null,
+    watermark_opacity: 0.5,
+    base_dir: null,
+  };
+}
 
 // ─── Format helpers ─────────────────────────────────────────────────
 
@@ -244,6 +285,13 @@ function renderFiles() {
     const thumbColors = { jpg: '#f59e0b', jpeg: '#f59e0b', png: '#3b82f6', webp: '#10b981' };
     const thumbColor = thumbColors[ext] || '#999';
     const thumbSrc = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="4" fill="' + thumbColor + '"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="11" font-weight="600">' + ext.toUpperCase() + '</text></svg>')}`;
+    // Async load real thumbnail
+    if (isTauri()) {
+      invoke("generate_thumbnail", { path: f.path, size: 48 }).then((dataUrl) => {
+        const imgEl = item.querySelector(".file-thumb");
+        if (imgEl) imgEl.src = dataUrl;
+      }).catch(() => {});
+    }
 
     const retryBtn = f.status === "failed"
       ? `<button class="retry-btn" data-path="${f.path}" title="${t("retry")}">↻</button>`
@@ -268,7 +316,51 @@ function renderFiles() {
         retrySingleFile(retry.dataset.path);
       });
     }
+
+    // Double-click for compare
+    item.addEventListener("dblclick", () => {
+      showCompare(f.path);
+    });
   }
+}
+
+async function showCompare(filePath) {
+  if (!isTauri()) return;
+  const content = document.getElementById("compare-content");
+  if (!content) return;
+  content.innerHTML = "";
+
+  // Original image
+  const origImg = document.createElement("div");
+  origImg.style.position = "relative";
+  origImg.innerHTML = `<div class="compare-label">Original</div><img src="" id="compare-orig" />`;
+  content.appendChild(origImg);
+
+  // Converted image (thumbnail as preview)
+  const convImg = document.createElement("div");
+  convImg.style.position = "relative";
+  convImg.innerHTML = `<div class="compare-label">WebP</div><img src="" id="compare-conv" />`;
+  content.appendChild(convImg);
+
+  // Load original thumbnail
+  try {
+    const origThumb = await invoke("generate_thumbnail", { path: filePath, size: 400 });
+    const el = document.getElementById("compare-orig");
+    if (el) el.src = origThumb;
+  } catch (_) {}
+
+  // Find converted file
+  const name = filePath.split(/[/\\]/).pop();
+  const stem = name.replace(/\.[^.]+$/, "");
+  const parent = filePath.replace(/[/\\][^/\\]+$/, "");
+  const webpPath = `${parent}/${stem}-webp.webp`;
+  try {
+    const convThumb = await invoke("generate_thumbnail", { path: webpPath, size: 400 });
+    const el = document.getElementById("compare-conv");
+    if (el) el.src = convThumb;
+  } catch (_) {}
+
+  compareModal.classList.add("visible");
 }
 
 function statusLabel(s) {
@@ -390,6 +482,18 @@ async function startConvert() {
         delete_source: chkDelete.checked,
         naming_mode: namingMode,
         output_dir: selectedDir || null,
+        lossless: chkLossless ? chkLossless.checked : false,
+        strip_exif: chkExif ? chkExif.checked : false,
+        preserve_structure: chkStructure ? chkStructure.checked : false,
+        target_size_kb: (chkTargetSize && chkTargetSize.checked && targetSizeInput) ? parseInt(targetSizeInput.value) || null : null,
+        output_format: outputFormat ? outputFormat.value : "webp",
+        resize_enabled: chkResize ? chkResize.checked : false,
+        resize_width: resizeW ? (parseInt(resizeW.value) || null) : null,
+        resize_height: resizeH ? (parseInt(resizeH.value) || null) : null,
+        resize_mode: resizeMode ? resizeMode.value : "fit",
+        watermark_text: (chkWatermark && chkWatermark.checked && watermarkText) ? watermarkText.value : null,
+        watermark_opacity: 0.5,
+        base_dir: (files.length > 0) ? files[0].path.split(/[/\\]/).slice(0, -1).join('/') : null,
       },
     });
   } catch (e) {
@@ -427,6 +531,18 @@ async function retrySingleFile(path) {
         delete_source: chkDelete.checked,
         naming_mode: namingMode,
         output_dir: selectedDir || null,
+        lossless: chkLossless ? chkLossless.checked : false,
+        strip_exif: chkExif ? chkExif.checked : false,
+        preserve_structure: chkStructure ? chkStructure.checked : false,
+        target_size_kb: (chkTargetSize && chkTargetSize.checked && targetSizeInput) ? parseInt(targetSizeInput.value) || null : null,
+        output_format: outputFormat ? outputFormat.value : "webp",
+        resize_enabled: chkResize ? chkResize.checked : false,
+        resize_width: resizeW ? (parseInt(resizeW.value) || null) : null,
+        resize_height: resizeH ? (parseInt(resizeH.value) || null) : null,
+        resize_mode: resizeMode ? resizeMode.value : "fit",
+        watermark_text: (chkWatermark && chkWatermark.checked && watermarkText) ? watermarkText.value : null,
+        watermark_opacity: 0.5,
+        base_dir: null,
       },
     });
   } catch (e) {
@@ -461,6 +577,15 @@ async function retryAllFailed() {
         delete_source: chkDelete.checked,
         naming_mode: namingMode,
         output_dir: selectedDir || null,
+        lossless: chkLossless ? chkLossless.checked : false,
+        output_format: outputFormat ? outputFormat.value : "webp",
+        resize_enabled: chkResize ? chkResize.checked : false,
+        resize_width: resizeW ? (parseInt(resizeW.value) || null) : null,
+        resize_height: resizeH ? (parseInt(resizeH.value) || null) : null,
+        resize_mode: resizeMode ? resizeMode.value : "fit",
+        watermark_text: (chkWatermark && chkWatermark.checked && watermarkText) ? watermarkText.value : null,
+        watermark_opacity: 0.5,
+        base_dir: null,
       },
     });
   } catch (e) {
@@ -617,6 +742,14 @@ document.addEventListener("keydown", (e) => {
 // ─── Tauri event listeners ──────────────────────────────────────────
 
 async function setupListeners() {
+  // Watch folder auto-convert
+  await listen("watch-auto-convert", (event) => {
+    const req = event.payload;
+    if (req && req.files) {
+      invoke("start_convert", { request: req }).catch((e) => console.warn("Watch convert failed:", e));
+    }
+  });
+
   // P0-2: Close window confirmation during conversion
   await listen("confirm-close", async () => {
     const yes = await ask(t("confirm-close"), { title: "Pic2WebP", kind: "warning" });
@@ -683,6 +816,78 @@ function updateLangToggle() {
   const lang = getLang();
   langZh.classList.toggle("active", lang === "zh");
   langEn.classList.toggle("active", lang === "en");
+}
+
+// ── Dark mode ──
+if (themeToggle) {
+  const savedTheme = localStorage.getItem("pic2webp-theme");
+  if (savedTheme === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+    themeToggle.textContent = "☀️";
+  }
+  themeToggle.addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    if (cur === "dark") {
+      document.documentElement.removeAttribute("data-theme");
+      themeToggle.textContent = "🌙";
+      localStorage.setItem("pic2webp-theme", "light");
+    } else {
+      document.documentElement.setAttribute("data-theme", "dark");
+      themeToggle.textContent = "☀️";
+      localStorage.setItem("pic2webp-theme", "dark");
+    }
+  });
+}
+
+// ── Advanced section toggle ──
+if (advancedToggle) {
+  advancedToggle.addEventListener("click", () => {
+    advancedToggle.classList.toggle("open");
+    advancedSection.classList.toggle("open");
+  });
+}
+
+// ── Target size toggle ──
+if (chkTargetSize) {
+  chkTargetSize.addEventListener("change", () => {
+    targetSizeInput.style.display = chkTargetSize.checked ? "inline-block" : "none";
+  });
+}
+
+// ── Watch folder ──
+let isWatching = false;
+if (watchBtn) {
+  watchBtn.addEventListener("click", async () => {
+    if (isWatching) {
+      await invoke("stop_watch").catch(() => {});
+      isWatching = false;
+      watchBtn.classList.remove("active");
+      watchBtn.textContent = t("watch-folder");
+      return;
+    }
+    if (!selectedDir) {
+      const dir = await open({ directory: true, title: t("watch-folder") });
+      if (!dir) return;
+      selectedDir = dir;
+      outputDir.value = dir;
+    }
+    const req = buildRequest([selectedDir]);
+    try {
+      await invoke("watch_folder", { dir: selectedDir, request: req });
+      isWatching = true;
+      watchBtn.classList.add("active");
+      watchBtn.textContent = t("stop-watch");
+    } catch (e) {
+      console.warn("Watch failed:", e);
+    }
+  });
+}
+
+// ── Compare modal ──
+if (compareModal) {
+  compareModal.addEventListener("click", (e) => {
+    if (e.target === compareModal) compareModal.classList.remove("visible");
+  });
 }
 
 if (langToggle) {

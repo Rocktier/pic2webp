@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicovrc/tauri-settings-schema/refs/heads/v2/schema.json",
   "productName": "Pic2WebP",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "identifier": "com.danglei.pic2webp",
   "build": {
     "beforeDevCommand": "npm run dev",
