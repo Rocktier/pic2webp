@@ -55,6 +55,7 @@ pub struct AppState {
     pub is_converting: Mutex<bool>,
     pub tool_paths: HashMap<String, Option<String>>,
     pub cancel_flag: Arc<AtomicBool>,
+    pub should_close: Arc<AtomicBool>,
 }
 
 // ─── Tool resolution ────────────────────────────────────────────────
@@ -137,6 +138,16 @@ fn check_tools(state: State<AppState>) -> ToolCheck {
 #[tauri::command]
 fn cancel_convert(state: State<AppState>) -> Result<(), String> {
     state.cancel_flag.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+fn force_close(state: State<AppState>, app: AppHandle) -> Result<(), String> {
+    state.cancel_flag.store(true, Ordering::Relaxed);
+    state.should_close.store(true, Ordering::Relaxed);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.close();
+    }
     Ok(())
 }
 
@@ -268,7 +279,8 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
                 emit_progress(&app_handle, src_path, "compressing", "precompress_jpeg", 0, 0);
                 let mut cmd = Command::new(jpegoptim.as_ref().unwrap());
                 cmd.arg("--strip-all").arg("--all-normal").arg(src_path);
-                run_cmd_timeout(&mut cmd, 60); // CR11: 60s for jpegoptim
+                run_cmd_timeout(&mut cmd, 60, &cancel_flag); // CR11: 60s for jpegoptim
+                if cancel_flag.load(Ordering::Relaxed) { continue; }
             }
 
             // ── Step 2: pre-compress PNG ──
@@ -297,7 +309,7 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
                         .arg("--output")
                         .arg(&tmp_str)
                         .arg(src_path);
-                    let (code, _) = run_cmd_timeout(&mut png_cmd, 90);
+                    let (code, _) = run_cmd_timeout(&mut png_cmd, 90, &cancel_flag);
 
                     if code == 0 && tmp_path.exists() {
                         let mut oxi_cmd = Command::new(oxi);
@@ -305,7 +317,7 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
                             .arg("--opt").arg("3")
                             .arg("--out").arg(src_path)
                             .arg(&tmp_str);
-                        run_cmd_timeout(&mut oxi_cmd, 120);
+                        run_cmd_timeout(&mut oxi_cmd, 120, &cancel_flag);
                         let _ = std::fs::remove_file(&tmp_str);
                         true
                     } else {
@@ -323,7 +335,7 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
                         oxi_cmd.arg("--strip").arg("safe")
                             .arg("--opt").arg("1")
                             .arg(src_path);
-                        run_cmd_timeout(&mut oxi_cmd, 120);
+                        run_cmd_timeout(&mut oxi_cmd, 120, &cancel_flag);
                     }
                 }
             }   // ← CR2: if-ext-png closes here
@@ -335,7 +347,16 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
             // ── Step 3: decode image & encode to WebP (native, no external cwebp) ──
             emit_progress(&app_handle, src_path, "converting", "converting", 0, 0);
 
-            // Check image dimensions before full decode to avoid OOM on huge images
+            // Check file size and image dimensions before full decode to avoid OOM
+            let file_size = std::fs::metadata(src_path).map(|m| m.len()).unwrap_or(0);
+            if file_size > 100_000_000 {
+                // File > 100MB — skip regardless of dimensions
+                stats.fail_count += 1;
+                emit_progress(&app_handle, src_path, "skipped",
+                    &format!("too_large:{}MB", file_size / 1_000_000), 0, 0);
+                let _ = app_handle.emit("convert-stats", &stats);
+                continue;
+            }
             let dims = ImageReader::open(src_path)
                 .ok()
                 .and_then(|r| r.into_dimensions().ok());
@@ -436,28 +457,9 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
 
 // ─── Command timeout helper (H2) ──────────────────────────────────
 
-/// Kill a process by PID (cross-platform)
-fn kill_process(pid: u32) {
-    // Fallback: use OS command when child handle is moved to another thread
-    #[cfg(unix)]
-    {
-        let _ = std::process::Command::new("kill")
-            .arg("-9")
-            .arg(pid.to_string())
-            .status();
-    }
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .arg("/PID").arg(pid.to_string())
-            .arg("/F").arg("/T")
-            .status();
-    }
-}
-
 /// Run a command with a timeout. Returns (exit_code, combined stdout+stderr).
 /// Kills the process if it exceeds the timeout.
-fn run_cmd_timeout(cmd: &mut Command, secs: u64) -> (i32, String) {
+fn run_cmd_timeout(cmd: &mut Command, secs: u64, cancel_flag: &Arc<AtomicBool>) -> (i32, String) {
     let mut child = match cmd
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -467,7 +469,7 @@ fn run_cmd_timeout(cmd: &mut Command, secs: u64) -> (i32, String) {
         Err(e) => return (-1, format!("spawn_fail:{}", e)),
     };
 
-    let pid = child.id();
+    let _pid = child.id();
     let (exit_tx, exit_rx) = mpsc::channel();
     let (out_tx, out_rx) = mpsc::channel();
     let (err_tx, err_rx) = mpsc::channel();
@@ -495,10 +497,12 @@ fn run_cmd_timeout(cmd: &mut Command, secs: u64) -> (i32, String) {
         });
     }
 
-    // Wait thread owns child; uses try_wait() so it can respond to kill signal
+    // Wait thread owns child; uses try_wait() so it can respond to kill/cancel signal
+    let cancel_flag_w = cancel_flag.clone();
     let exit_tx2 = exit_tx.clone();
     std::thread::spawn(move || {
         loop {
+            // Check kill signal from main thread
             match kill_rx.try_recv() {
                 Ok(()) => {
                     let _ = child.kill();
@@ -507,6 +511,12 @@ fn run_cmd_timeout(cmd: &mut Command, secs: u64) -> (i32, String) {
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => break,
+            }
+            // Check cancel flag from user
+            if cancel_flag_w.load(Ordering::Relaxed) {
+                let _ = child.kill();
+                let _ = child.wait();
+                break;
             }
             match child.try_wait() {
                 Ok(Some(status)) => {
@@ -524,23 +534,47 @@ fn run_cmd_timeout(cmd: &mut Command, secs: u64) -> (i32, String) {
         }
     });
 
-    match exit_rx.recv_timeout(Duration::from_secs(secs)) {
-        Ok(Ok(s)) => {
+    // Poll for result, also checking cancel_flag for user-initiated cancel
+    let start = std::time::Instant::now();
+    let result = loop {
+        match exit_rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(Ok(s)) => break Ok(s),
+            Ok(Err(_)) => break Err(1i32), // ERR_PROCESS
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if cancel_flag.load(Ordering::Relaxed) {
+                    cancelled.store(true, Ordering::Relaxed);
+                    let _ = kill_tx.send(());
+                    break Err(2i32); // cancelled
+                }
+                if start.elapsed() >= Duration::from_secs(secs) {
+                    break Err(3i32); // timeout
+                }
+                continue;
+            }
+            Err(_) => break Err(4i32), // ERR_CHANNEL
+        }
+    };
+    match result {
+        Ok(s) => {
             let code = s.code().unwrap_or(-1);
             let out = out_rx.recv_timeout(Duration::from_secs(3)).unwrap_or_default();
             let err = err_rx.recv_timeout(Duration::from_secs(3)).unwrap_or_default();
             let _ = kill_tx.send(());
             (code, format!("{}{}", out, err))
         }
-        Ok(Err(_)) => (-1, "ERR_PROCESS".into()),
-        Err(mpsc::RecvTimeoutError::Timeout) => {
+        Err(2) => {
+            std::thread::sleep(Duration::from_millis(100));
+            (-1, "cancelled".into())
+        }
+        Err(1) => (-1, "ERR_PROCESS".into()),
+        Err(4) => (-1, "ERR_CHANNEL".into()),
+        Err(_) => {
+            // Timeout: kill child via channel only (P1-4: no redundant kill_process)
             cancelled.store(true, Ordering::Relaxed);
             let _ = kill_tx.send(());
-            kill_process(pid);
             std::thread::sleep(Duration::from_millis(200));
             (-1, format!("timeout:{}s", secs))
         }
-        Err(_) => (-1, "ERR_CHANNEL".into()),
     }
 }
 
@@ -568,10 +602,23 @@ pub fn run() {
                 is_converting: Mutex::new(false),
                 tool_paths,
                 cancel_flag: Arc::new(AtomicBool::new(false)),
+                should_close: Arc::new(AtomicBool::new(false)),
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![check_tools, start_convert, cancel_convert, get_file_size])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if let Some(state) = window.try_state::<AppState>() {
+                    if let Ok(converting) = state.is_converting.lock() {
+                        if *converting && !state.should_close.load(Ordering::Relaxed) {
+                            api.prevent_close();
+                            let _ = window.emit("confirm-close", ());
+                        }
+                    }
+                }
+            }
+        })
+        .invoke_handler(tauri::generate_handler![check_tools, start_convert, cancel_convert, force_close, get_file_size])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

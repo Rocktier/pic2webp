@@ -1,13 +1,16 @@
 {
   "identifier": "default",
   "description": "默认权限 - Pic2WebP 核心功能",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:event:default",
     "core:window:default",
     "dialog:allow-open",
     "dialog:allow-message",
-    "opener:default"
+    "opener:default",
+    "dialog:allow-ask"
   ]
 }

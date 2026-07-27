@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { initLang, getLang, toggleLang, t, translateBackendMessage } from "./i18n.js";
 
@@ -359,6 +359,12 @@ function updateConvertBtn() {
 async function startConvert() {
   if (isConverting) return;
 
+  // P0-3: Confirm before deleting source files
+  if (chkDelete.checked) {
+    const yes = await ask(t("confirm-delete"), { title: "Pic2WebP", kind: "warning" });
+    if (!yes) return;
+  }
+
   isConverting = true;
   updateConvertBtn();
 
@@ -372,6 +378,8 @@ async function startConvert() {
 
   stats = null;
   statsPanel.hidden = true;
+  const retryAllBtn = document.getElementById("retry-all-btn");
+  if (retryAllBtn) retryAllBtn.hidden = true;
 
   try {
     await invoke("start_convert", {
@@ -423,6 +431,42 @@ async function retrySingleFile(path) {
     });
   } catch (e) {
     console.warn("Retry failed:", e);
+  }
+}
+
+// ─── Retry all failed files (P1-5) ─────────────────────────────────
+
+async function retryAllFailed() {
+  if (isConverting) return;
+  const failedFiles = files.filter((f) => f.status === "failed");
+  if (failedFiles.length === 0) return;
+
+  for (const f of failedFiles) {
+    f.status = "pending";
+    f.message = "";
+    f.savedBytes = 0;
+    f.savedPct = 0;
+  }
+  renderFiles();
+
+  isConverting = true;
+  updateConvertBtn();
+
+  try {
+    await invoke("start_convert", {
+      request: {
+        files: failedFiles.map((f) => f.path),
+        quality: Math.max(10, Math.min(100, parseInt(qualitySlider.value) || 80)),
+        recursive: false,
+        delete_source: chkDelete.checked,
+        naming_mode: namingMode,
+        output_dir: selectedDir || null,
+      },
+    });
+  } catch (e) {
+    console.warn("Retry all failed:", e);
+    isConverting = false;
+    updateConvertBtn();
   }
 }
 
@@ -513,6 +557,8 @@ dirBtn.addEventListener("click", async () => {
       selectedDir = dir;
       outputDir.value = dir;
       dirClear.hidden = false;
+      const dirCopy = document.getElementById("dir-copy");
+      if (dirCopy) dirCopy.hidden = false;
     }
   } catch (e) {
     console.log("Dialog not available:", e);
@@ -523,6 +569,8 @@ dirClear.addEventListener("click", () => {
   selectedDir = null;
   outputDir.value = "";
   dirClear.hidden = true;
+  const dirCopy = document.getElementById("dir-copy");
+  if (dirCopy) dirCopy.hidden = true;
 });
 
 convertBtn.addEventListener("click", () => {
@@ -533,17 +581,50 @@ convertBtn.addEventListener("click", () => {
   }
 });
 
+// P1-5: Retry all failed button
+const retryAllBtn = document.getElementById("retry-all-btn");
+if (retryAllBtn) {
+  retryAllBtn.addEventListener("click", retryAllFailed);
+}
+
+// P1-6: Copy output dir path
+const dirCopy = document.getElementById("dir-copy");
+if (dirCopy) {
+  dirCopy.addEventListener("click", async () => {
+    if (!selectedDir) return;
+    try {
+      await navigator.clipboard.writeText(selectedDir);
+      const orig = dirCopy.textContent;
+      dirCopy.textContent = t("copied");
+      setTimeout(() => { dirCopy.textContent = orig; }, 1500);
+    } catch (_) {}
+  });
+}
+
 donateBtn.addEventListener("click", () => { donateModal.classList.add("visible"); });
 modalClose.addEventListener("click", () => { donateModal.classList.remove("visible"); });
 donateModal.addEventListener("click", (e) => { if (e.target === donateModal) donateModal.classList.remove("visible"); });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && e.target.tagName !== "INPUT" && !convertBtn.disabled) startConvert();
+  if (e.key !== "Enter") return;
+  // P2: Don't trigger conversion when typing in inputs, textareas, or when modal is visible
+  const tag = e.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  if (donateModal && donateModal.classList.contains("visible")) return;
+  if (convertBtn && !convertBtn.disabled) startConvert();
 });
 
 // ─── Tauri event listeners ──────────────────────────────────────────
 
 async function setupListeners() {
+  // P0-2: Close window confirmation during conversion
+  await listen("confirm-close", async () => {
+    const yes = await ask(t("confirm-close"), { title: "Pic2WebP", kind: "warning" });
+    if (yes) {
+      await invoke("force_close").catch((e) => console.warn("force_close failed:", e));
+    }
+  });
+
   await listen("convert-progress", (event) => {
     const p = event.payload;
     updateFileProgress(p.file, p.status, p.message, p.saved_bytes, p.saved_pct);
@@ -566,6 +647,11 @@ async function setupListeners() {
     renderFiles();
     updateStats(event.payload);
     updateConvertBtn();
+    // P1-5: Show retry-all button if there are failed files
+    const retryAllBtn = document.getElementById("retry-all-btn");
+    if (retryAllBtn) {
+      retryAllBtn.hidden = (event.payload.fail_count === 0);
+    }
     // Pulse the stats panel to draw attention to results
     statsPanel.classList.add("pulse");
     setTimeout(() => statsPanel.classList.remove("pulse"), 1000);

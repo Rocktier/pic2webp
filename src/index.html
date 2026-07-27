@@ -600,6 +600,25 @@ input[type="range"].quality-slider {
 
 .btn-text:hover { color: var(--primary); background: var(--primary-light); }
 
+/* P1-5: Retry all failed button in stats */
+.retry-all {
+  margin-left: auto;
+  padding: 2px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: none;
+}
+.retry-all:hover { background: var(--warn-bg, #fef3cd); }
+
+/* P1-6: Copy dir button */
+#dir-copy {
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
 /* Donate — subtle text link */
 .btn-donate {
   width: 100%;
@@ -915,6 +934,7 @@ input[type="range"].quality-slider {
           <div class="dir-row">
             <input type="text" id="output-dir" class="dir-input" readonly placeholder="与源文件同目录" data-i18n-placeholder="same-dir" />
             <button id="dir-btn" class="btn-secondary primary" data-i18n="select">选择</button>
+            <button id="dir-copy" class="btn-text" hidden title="Copy Path" data-i18n="copy-path">⧉</button>
             <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
           </div>
         </div>
@@ -952,6 +972,7 @@ input[type="range"].quality-slider {
             <span class="stat-saved-val" id="stat-saved">—</span>
             <span class="stat-saved-lbl" data-i18n="saved">节省</span>
           </div>
+          <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">重试全部失败</button>
         </div>
 
         <!-- Convert button -->

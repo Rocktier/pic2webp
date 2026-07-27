@@ -1,6 +1,6 @@
 [package]
 name = "pic2webp"
-version = "1.5.0"
+version = "1.5.1"
 description = "图片转 WebP 工具 - Tauri 跨平台版"
 authors = ["danglei"]
 edition = "2024"

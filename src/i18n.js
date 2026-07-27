@@ -108,6 +108,13 @@ const dict = {
     "msg-open-fail": "无法打开图片: {e}",
     "msg-decode-fail": "解码失败: {e}",
     "msg-too-large": "图片尺寸过大（{e}），已跳过",
+
+    // P0-2/P0-3: Confirmation dialogs
+    "confirm-close": "正在转换中，确定要退出吗？",
+    "confirm-delete": "⚠️ 转换后将删除原始文件，此操作不可撤销。确定继续吗？",
+    "retry-all": "重试全部失败",
+    "copy-path": "复制路径",
+    "copied": "已复制",
   },
 
   en: {
@@ -127,18 +134,18 @@ const dict = {
     "why-1": "Modern image format by Google",
     "why-2": "25-50% smaller at same quality",
     "why-3": "Supports transparency, replaces PNG",
-    "why-4": "Chrome / Edge / Firefox / Safari compatible",
+    "why-4": "Works in all modern browsers",
     "how-title": "How it works",
     "how-1": "Built-in WebP encoder, no extra tools needed",
     "how-2": "Optional jpegoptim / pngquant pre-compression",
-    "how-3": "All processing is local, no uploads",
+    "how-3": "100% local processing — no uploads, no network calls",
     "how-4": "Auto-calculates space savings",
 
     // Batch tips
     "tips-title": "Batch Tips",
-    "tips-1": "Sequential conversion, no lag on batch import",
+    "tips-1": "Sequential processing — no lag on large batches",
     "tips-2": "Keep each file under 50MB to avoid high memory use",
-    "tips-3": "Recommended max 200 files per batch",
+    "tips-3": "Keep batches under 200 files for best performance",
 
     // Blog
     "blog": "Blog",
@@ -167,7 +174,7 @@ const dict = {
     // Stats
     "success": "Done",
     "skip": "Skip",
-    "fail": "Fail",
+    "fail": "Failed",
     "saved": "Saved",
 
     // Convert button
@@ -188,7 +195,7 @@ const dict = {
     "saved-bytes": "Saved {size}",
     "convert-failed": "Failed to start conversion",
     "large-file-warn": "⚠️ {name} ({size}) is large, conversion may use significant memory",
-    "batch-warn": "⚠️ {n} files added, consider processing in smaller batches",
+    "batch-warn": "⚠️ {n} files loaded — consider smaller batches",
 
     // Dialog
     "select-output-dir": "Select output directory",
@@ -217,6 +224,13 @@ const dict = {
     "msg-open-fail": "Cannot open image: {e}",
     "msg-decode-fail": "Decode failed: {e}",
     "msg-too-large": "Image too large ({e}), skipped",
+
+    // P0-2/P0-3: Confirmation dialogs
+    "confirm-close": "Conversion in progress. Are you sure you want to quit?",
+    "confirm-delete": "⚠️ Source files will be deleted after conversion. This cannot be undone. Continue?",
+    "retry-all": "Retry All Failed",
+    "copy-path": "Copy Path",
+    "copied": "Copied",
   },
 };
 
