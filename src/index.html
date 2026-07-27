@@ -402,7 +402,7 @@ input[type="range"].quality-slider {
 
 .pill-btn {
   flex: 1;
-  padding: 3px 0;
+  padding: 5px 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -413,6 +413,10 @@ input[type="range"].quality-slider {
   color: var(--text2);
   transition: all .12s;
   text-align: center;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .pill-btn:hover {
@@ -424,6 +428,15 @@ input[type="range"].quality-slider {
   background: var(--primary);
   color: white;
   border-color: var(--primary);
+}
+.pill-btn.primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.pill-btn.primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .dir-row {
@@ -556,7 +569,7 @@ input[type="range"].quality-slider {
 }
 
 .btn-secondary {
-  padding: 4px 10px;
+  padding: 5px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -567,6 +580,10 @@ input[type="range"].quality-slider {
   color: var(--text);
   transition: all .15s;
   line-height: 1.4;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-secondary:hover {
@@ -593,9 +610,13 @@ input[type="range"].quality-slider {
   font-size: 11px;
   font-family: var(--font);
   font-weight: 500;
-  padding: 2px 4px;
+  padding: 5px 6px;
   border-radius: 4px;
   transition: color .15s;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-text:hover { color: var(--primary); background: var(--primary-light); }
@@ -749,6 +770,12 @@ input[type="range"].quality-slider {
 }
 
 /* ───────── Language toggle ───────── */
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
 .lang-toggle {
   display: flex;
   align-items: center;
@@ -811,20 +838,37 @@ input[type="range"].quality-slider {
   --bg: #1a1a2e;
   --surface: #16213e;
   --surface2: #0f3460;
+  --band: #1e1e36;
   --border: #2a2a4a;
   --text: #e0e0e0;
   --text2: #a0a0b0;
   --text3: #707080;
   --primary: #4a9eff;
+  --primary-hover: #3a8eef;
   --primary-light: #1a3a5a;
   --success: #2ecc71;
+  --success-light: #0a2a1a;
+  --warning: #f59e0b;
+  --warning-light: #2a2510;
+  --danger: #ef4444;
+  --danger-light: #2a1010;
   --skip: #f39c12;
   --warn: #e74c3c;
   --shadow: rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2);
 }
 [data-theme="dark"] .donate-modal { background: rgba(0,0,0,0.7); }
 [data-theme="dark"] .donate-box { background: var(--surface); }
-[data-theme="dark"] .dropzone { background: var(--surface2); }
+[data-theme="dark"] .dropzone { background: var(--surface2); border-color: #3a3a5a; }
+[data-theme="dark"] .empty-state { background: var(--surface); }
+[data-theme="dark"] .file-item { background: var(--surface); }
+[data-theme="dark"] .stats-panel { background: var(--surface); }
+[data-theme="dark"] .btn-secondary:hover { background: var(--surface2); border-color: var(--border); }
+[data-theme="dark"] .pill-btn:hover { background: var(--surface2); border-color: var(--border); }
+[data-theme="dark"] .dir-input { background: var(--surface2); }
+[data-theme="dark"] .quality-slider { accent-color: var(--primary); }
+[data-theme="dark"] .advanced-row input,
+[data-theme="dark"] .advanced-row select { background: var(--surface2); }
 
 /* ── Advanced section ── */
 .advanced-toggle {
@@ -858,22 +902,27 @@ input[type="range"].quality-slider {
 .mini-toggle {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; color: var(--text2); cursor: pointer;
+  min-height: 24px;
 }
-.mini-toggle input { margin: 0; }
+.mini-toggle input { margin: 0; width: 13px; height: 13px; }
 
 /* ── Dark mode toggle ── */
 .theme-toggle {
-  background: none; border: 1px solid var(--border);
-  border-radius: 6px; padding: 2px 8px;
-  font-size: 14px; cursor: pointer; color: var(--text2);
+  background: none; border: none;
+  border-radius: var(--radius-sm); padding: 4px 6px;
+  font-size: 14px; cursor: pointer; color: var(--text3);
+  display: inline-flex; align-items: center; justify-content: center;
+  -webkit-app-region: no-drag; transition: color .15s;
 }
 .theme-toggle:hover { color: var(--primary); }
 
 /* ── Watch button ── */
 .watch-btn {
-  font-size: 11px; padding: 2px 8px;
-  border: 1px solid var(--border); border-radius: 6px;
+  font-size: 10px; padding: 5px 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: none; color: var(--text2); cursor: pointer;
+  min-height: 24px; display: inline-flex; align-items: center; justify-content: center;
+  white-space: nowrap;
 }
 .watch-btn:hover { color: var(--primary); border-color: var(--primary); }
 .watch-btn.active { color: var(--warn); border-color: var(--warn); }
@@ -925,8 +974,9 @@ input[type="range"].quality-slider {
           <span class="subtitle" data-i18n="subtitle">图片转 WebP · 免费 · 本地处理</span>
         </div>
       </div>
-      <button class="theme-toggle" id="theme-toggle">🌙</button>
-        <div class="lang-toggle" id="lang-toggle">
+      <div class="header-controls">
+          <button class="theme-toggle" id="theme-toggle">🌙</button>
+          <div class="lang-toggle" id="lang-toggle">
         <span id="lang-zh" class="active">中</span>
         <span id="lang-en">EN</span>
       </div>
@@ -1030,10 +1080,12 @@ input[type="range"].quality-slider {
           <div class="section-label" data-i18n="output-dir">输出目录</div>
           <div class="dir-row">
             <input type="text" id="output-dir" class="dir-input" readonly placeholder="与源文件同目录" data-i18n-placeholder="same-dir" />
-            <button id="dir-btn" class="btn-secondary primary" data-i18n="select">选择</button>
-            <button id="dir-copy" class="btn-text" hidden title="Copy Path" data-i18n="copy-path">⧉</button>
             <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
-            <button id="watch-btn" class="watch-btn" data-i18n="watch-folder">监控文件夹</button>
+            <button id="watch-btn" class="watch-btn" data-i18n="watch-folder">监控</button>
+          </div>
+          <div class="pill-group" id="dir-pills">
+            <button id="dir-btn" class="pill-btn primary" data-i18n="select">选择</button>
+            <button id="dir-copy" class="pill-btn" hidden data-i18n="copy-path">复制路径</button>
           </div>
         </div>
 
