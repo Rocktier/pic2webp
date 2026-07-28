@@ -481,13 +481,28 @@ input[type="range"].quality-slider {
 /* Stats — compact single-row */
 .stats-panel {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  padding: 6px 10px;
+  gap: 2px 0;
+  padding: 8px 10px;
   background: var(--surface);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+}
+.stats-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  justify-content: center;
+}
+.stats-row-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: space-between;
+  margin-top: 2px;
 }
 
 .stats-panel[hidden] { display: none; }
@@ -623,13 +638,12 @@ input[type="range"].quality-slider {
 
 /* P1-5: Retry all failed button in stats */
 .retry-all {
-  margin-left: auto;
-  padding: 2px 10px;
-  font-size: 11px;
+  padding: 3px 8px;
+  font-size: 10px;
   white-space: nowrap;
   color: var(--warn);
   border: 1px solid var(--warn);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: none;
 }
 .retry-all:hover { background: var(--warn-bg, #fef3cd); }
@@ -1144,23 +1158,27 @@ input[type="range"].quality-slider {
 
         <!-- Stats — compact single row -->
         <div class="stats-panel" id="stats-panel" hidden>
-          <div class="stat-item">
-            <span class="stat-num" id="stat-success">0</span>
-            <span class="stat-lbl" data-i18n="success">成功</span>
+          <div class="stats-row">
+            <div class="stat-item">
+              <span class="stat-num" id="stat-success">0</span>
+              <span class="stat-lbl" data-i18n="success">成功</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-num" id="stat-skip">0</span>
+              <span class="stat-lbl" data-i18n="skip">跳过</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-num stat-fail" id="stat-fail">0</span>
+              <span class="stat-lbl" data-i18n="fail">失败</span>
+            </div>
           </div>
-          <div class="stat-item">
-            <span class="stat-num" id="stat-skip">0</span>
-            <span class="stat-lbl" data-i18n="skip">跳过</span>
+          <div class="stats-row-bottom">
+            <div class="stat-saved">
+              <span class="stat-saved-val" id="stat-saved">—</span>
+              <span class="stat-saved-lbl" data-i18n="saved">节省</span>
+            </div>
+            <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">重试全部失败</button>
           </div>
-          <div class="stat-item">
-            <span class="stat-num stat-fail" id="stat-fail">0</span>
-            <span class="stat-lbl" data-i18n="fail">失败</span>
-          </div>
-          <div class="stat-saved">
-            <span class="stat-saved-val" id="stat-saved">—</span>
-            <span class="stat-saved-lbl" data-i18n="saved">节省</span>
-          </div>
-          <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">重试全部失败</button>
         </div>
 
         <!-- Convert button -->
