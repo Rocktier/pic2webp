@@ -1,13 +1,13 @@
 [package]
 name = "pic2webp"
-version = "1.6.0"
+version = "1.6.2"
 description = "图片转 WebP 工具 - Tauri 跨平台版"
 authors = ["danglei"]
 edition = "2024"
 
 [lib]
 name = "pic2webp_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["staticlib", "cdylib"]
 
 [[bin]]
 name = "pic2webp"

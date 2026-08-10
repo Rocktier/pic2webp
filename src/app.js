@@ -65,26 +65,26 @@ const watchBtn = $("#watch-btn");
 const compareModal = $("#compare-modal");
 
 // ─── Build convert request ─────────────────────────────────────────
-function buildRequest(fileList) {
+function buildRequest(fileList, { recursive, baseDir } = {}) {
   return {
     files: fileList,
     quality: Math.max(10, Math.min(100, parseInt(qualitySlider.value) || 80)),
-    recursive: chkRecursive.checked,
+    recursive: recursive ?? chkRecursive.checked,
     delete_source: chkDelete.checked,
     naming_mode: namingMode,
     output_dir: selectedDir || null,
-    lossless: chkLossless ? chkLossless.checked : false,
-    strip_exif: chkExif ? chkExif.checked : false,
-    preserve_structure: chkStructure ? chkStructure.checked : false,
-    target_size_kb: (chkTargetSize && chkTargetSize.checked && targetSizeInput) ? parseInt(targetSizeInput.value) || null : null,
-    output_format: outputFormat ? outputFormat.value : "webp",
-    resize_enabled: chkResize ? chkResize.checked : false,
-    resize_width: resizeW ? (parseInt(resizeW.value) || null) : null,
-    resize_height: resizeH ? (parseInt(resizeH.value) || null) : null,
-    resize_mode: resizeMode ? resizeMode.value : "fit",
-    watermark_text: (chkWatermark && chkWatermark.checked && watermarkText) ? watermarkText.value : null,
+    lossless: chkLossless?.checked ?? false,
+    strip_exif: chkExif?.checked ?? false,
+    preserve_structure: chkStructure?.checked ?? false,
+    target_size_kb: chkTargetSize?.checked && targetSizeInput ? parseInt(targetSizeInput.value) || null : null,
+    output_format: outputFormat?.value ?? "webp",
+    resize_enabled: chkResize?.checked ?? false,
+    resize_width: resizeW ? parseInt(resizeW.value) || null : null,
+    resize_height: resizeH ? parseInt(resizeH.value) || null : null,
+    resize_mode: resizeMode?.value ?? "fit",
+    watermark_text: chkWatermark?.checked && watermarkText ? watermarkText.value : null,
     watermark_opacity: 0.5,
-    base_dir: null,
+    base_dir: baseDir ?? null,
   };
 }
 
@@ -473,29 +473,9 @@ async function startConvert() {
   const retryAllBtn = document.getElementById("retry-all-btn");
   if (retryAllBtn) retryAllBtn.hidden = true;
 
+  const baseDir = files.length > 0 ? files[0].path.split(/[/\\]/).slice(0, -1).join('/') : null;
   try {
-    await invoke("start_convert", {
-      request: {
-        files: files.map((f) => f.path),
-        quality: Math.max(10, Math.min(100, parseInt(qualitySlider.value) || 80)),
-        recursive: chkRecursive.checked,
-        delete_source: chkDelete.checked,
-        naming_mode: namingMode,
-        output_dir: selectedDir || null,
-        lossless: chkLossless ? chkLossless.checked : false,
-        strip_exif: chkExif ? chkExif.checked : false,
-        preserve_structure: chkStructure ? chkStructure.checked : false,
-        target_size_kb: (chkTargetSize && chkTargetSize.checked && targetSizeInput) ? parseInt(targetSizeInput.value) || null : null,
-        output_format: outputFormat ? outputFormat.value : "webp",
-        resize_enabled: chkResize ? chkResize.checked : false,
-        resize_width: resizeW ? (parseInt(resizeW.value) || null) : null,
-        resize_height: resizeH ? (parseInt(resizeH.value) || null) : null,
-        resize_mode: resizeMode ? resizeMode.value : "fit",
-        watermark_text: (chkWatermark && chkWatermark.checked && watermarkText) ? watermarkText.value : null,
-        watermark_opacity: 0.5,
-        base_dir: (files.length > 0) ? files[0].path.split(/[/\\]/).slice(0, -1).join('/') : null,
-      },
-    });
+    await invoke("start_convert", { request: buildRequest(files.map((f) => f.path), { baseDir }) });
   } catch (e) {
     for (const f of files) {
       f.status = "pending";
@@ -523,28 +503,7 @@ async function retrySingleFile(path) {
   renderFiles();
 
   try {
-    await invoke("start_convert", {
-      request: {
-        files: [path],
-        quality: Math.max(10, Math.min(100, parseInt(qualitySlider.value) || 80)),
-        recursive: false,
-        delete_source: chkDelete.checked,
-        naming_mode: namingMode,
-        output_dir: selectedDir || null,
-        lossless: chkLossless ? chkLossless.checked : false,
-        strip_exif: chkExif ? chkExif.checked : false,
-        preserve_structure: chkStructure ? chkStructure.checked : false,
-        target_size_kb: (chkTargetSize && chkTargetSize.checked && targetSizeInput) ? parseInt(targetSizeInput.value) || null : null,
-        output_format: outputFormat ? outputFormat.value : "webp",
-        resize_enabled: chkResize ? chkResize.checked : false,
-        resize_width: resizeW ? (parseInt(resizeW.value) || null) : null,
-        resize_height: resizeH ? (parseInt(resizeH.value) || null) : null,
-        resize_mode: resizeMode ? resizeMode.value : "fit",
-        watermark_text: (chkWatermark && chkWatermark.checked && watermarkText) ? watermarkText.value : null,
-        watermark_opacity: 0.5,
-        base_dir: null,
-      },
-    });
+    await invoke("start_convert", { request: buildRequest([path], { recursive: false }) });
   } catch (e) {
     console.warn("Retry failed:", e);
   }
@@ -569,25 +528,7 @@ async function retryAllFailed() {
   updateConvertBtn();
 
   try {
-    await invoke("start_convert", {
-      request: {
-        files: failedFiles.map((f) => f.path),
-        quality: Math.max(10, Math.min(100, parseInt(qualitySlider.value) || 80)),
-        recursive: false,
-        delete_source: chkDelete.checked,
-        naming_mode: namingMode,
-        output_dir: selectedDir || null,
-        lossless: chkLossless ? chkLossless.checked : false,
-        output_format: outputFormat ? outputFormat.value : "webp",
-        resize_enabled: chkResize ? chkResize.checked : false,
-        resize_width: resizeW ? (parseInt(resizeW.value) || null) : null,
-        resize_height: resizeH ? (parseInt(resizeH.value) || null) : null,
-        resize_mode: resizeMode ? resizeMode.value : "fit",
-        watermark_text: (chkWatermark && chkWatermark.checked && watermarkText) ? watermarkText.value : null,
-        watermark_opacity: 0.5,
-        base_dir: null,
-      },
-    });
+    await invoke("start_convert", { request: buildRequest(failedFiles.map((f) => f.path), { recursive: false }) });
   } catch (e) {
     console.warn("Retry all failed:", e);
     isConverting = false;

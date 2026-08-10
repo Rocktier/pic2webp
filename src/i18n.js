@@ -83,7 +83,6 @@ const dict = {
 
     // Dialog
     "select-output-dir": "选择输出目录",
-
     "no-precompress": "预压缩未启用（可选安装 jpegoptim / pngquant / oxipng）",
 
     // Donate
@@ -96,7 +95,7 @@ const dict = {
     "alipay": "支付宝",
     "wechat-pay": "微信支付",
 
-    // Backend message overrides (maps Rust message codes to localized)
+    // Backend message overrides
     "msg-precompress-jpeg": "JPEG 预压缩...",
     "msg-precompress-png": "PNG 预压缩...",
     "msg-converting": "转换为 WebP...",
@@ -109,7 +108,7 @@ const dict = {
     "msg-decode-fail": "解码失败: {e}",
     "msg-too-large": "图片尺寸过大（{e}），已跳过",
 
-    // P0-2/P0-3: Confirmation dialogs
+    // Confirmation dialogs
     "confirm-close": "正在转换中，确定要退出吗？",
     "confirm-delete": "⚠️ 转换后将删除原始文件，此操作不可撤销。确定继续吗？",
     "retry-all": "重试全部失败",
@@ -117,34 +116,22 @@ const dict = {
     "copied": "已复制",
     "lossless": "无损",
     "target-size": "目标大小",
-    "target-size-hint": "自动调整质量以逼近目标",
     "advanced": "高级选项",
     "resize": "缩放",
     "resize-width": "宽",
     "resize-height": "高",
-    "resize-mode": "模式",
     "resize-fit": "等比",
     "resize-fill": "填充",
     "resize-shrink": "仅缩小",
     "watermark": "水印",
     "watermark-text": "水印文字",
-    "watermark-opacity": "透明度",
     "output-format": "输出格式",
     "format-webp": "WebP",
-    "format-avif": "AVIF",
     "format-both": "WebP+AVIF",
     "preserve-structure": "保留目录结构",
     "strip-exif": "清除 EXIF",
     "watch-folder": "监控文件夹",
     "stop-watch": "停止监控",
-    "watching": "监控中...",
-    "preset": "预设",
-    "preset-save": "保存预设",
-    "preset-delete": "删除预设",
-    "dark-mode": "深色模式",
-    "compare": "对比",
-    "compare-title": "转换前后对比",
-    "ffmpeg-needed": "GIF 转换需要 ffmpeg",
   },
 
   en: {
@@ -229,7 +216,6 @@ const dict = {
 
     // Dialog
     "select-output-dir": "Select output directory",
-
     "no-precompress": "Pre-compression disabled (optional: jpegoptim / pngquant / oxipng)",
 
     // Donate
@@ -255,7 +241,7 @@ const dict = {
     "msg-decode-fail": "Decode failed: {e}",
     "msg-too-large": "Image too large ({e}), skipped",
 
-    // P0-2/P0-3: Confirmation dialogs
+    // Confirmation dialogs
     "confirm-close": "Conversion in progress. Are you sure you want to quit?",
     "confirm-delete": "⚠️ Source files will be deleted after conversion. This cannot be undone. Continue?",
     "retry-all": "Retry All Failed",
@@ -263,34 +249,22 @@ const dict = {
     "copied": "Copied",
     "lossless": "Lossless",
     "target-size": "Target Size",
-    "target-size-hint": "Auto-adjust quality to meet target",
     "advanced": "Advanced",
     "resize": "Resize",
     "resize-width": "W",
     "resize-height": "H",
-    "resize-mode": "Mode",
     "resize-fit": "Fit",
     "resize-fill": "Fill",
     "resize-shrink": "Shrink only",
     "watermark": "Watermark",
     "watermark-text": "Watermark text",
-    "watermark-opacity": "Opacity",
     "output-format": "Output Format",
     "format-webp": "WebP",
-    "format-avif": "AVIF",
     "format-both": "WebP+AVIF",
     "preserve-structure": "Preserve folder structure",
     "strip-exif": "Strip EXIF",
     "watch-folder": "Watch Folder",
     "stop-watch": "Stop Watch",
-    "watching": "Watching...",
-    "preset": "Preset",
-    "preset-save": "Save Preset",
-    "preset-delete": "Delete Preset",
-    "dark-mode": "Dark Mode",
-    "compare": "Compare",
-    "compare-title": "Before / After",
-    "ffmpeg-needed": "GIF conversion requires ffmpeg",
   },
 };
 
@@ -300,31 +274,19 @@ let currentLang = "zh";
 
 // ─── Public API ─────────────────────────────────────────────────────
 
-/**
- * Initialize language from localStorage or system locale
- */
 export function initLang() {
   const saved = localStorage.getItem("pic2webp-lang");
   if (saved === "zh" || saved === "en") {
     currentLang = saved;
   } else {
-    // Detect system language
     const sysLang = navigator.language || navigator.userLanguage || "zh";
     currentLang = sysLang.startsWith("zh") ? "zh" : "en";
   }
   applyLang();
 }
 
-/**
- * Get current language
- */
-export function getLang() {
-  return currentLang;
-}
+export function getLang() { return currentLang; }
 
-/**
- * Toggle between zh and en
- */
 export function toggleLang() {
   currentLang = currentLang === "zh" ? "en" : "zh";
   localStorage.setItem("pic2webp-lang", currentLang);
@@ -332,12 +294,6 @@ export function toggleLang() {
   return currentLang;
 }
 
-/**
- * Translate a key with optional template params
- * @param {string} key - dictionary key
- * @param {object} params - { n: 5, size: "12 KB" } etc.
- * @returns {string}
- */
 export function t(key, params = {}) {
   const langDict = dict[currentLang] || dict.zh;
   let str = langDict[key] || dict.zh[key] || key;
@@ -347,41 +303,23 @@ export function t(key, params = {}) {
   return str;
 }
 
-/**
- * Apply translations to all [data-i18n] elements in the DOM
- * Called on init and on language toggle
- */
 export function applyLang() {
   document.documentElement.lang = currentLang === "zh" ? "zh-CN" : "en";
-
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     const key = el.getAttribute("data-i18n");
     const paramsAttr = el.getAttribute("data-i18n-params");
     let params = {};
-    if (paramsAttr) {
-      try { params = JSON.parse(paramsAttr); } catch (_) {}
-    }
+    if (paramsAttr) { try { params = JSON.parse(paramsAttr); } catch (_) {} }
     el.textContent = t(key, params);
   });
-
-  // Update placeholders
   document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
-    const key = el.getAttribute("data-i18n-placeholder");
-    el.placeholder = t(key);
+    el.placeholder = t(el.getAttribute("data-i18n-placeholder"));
   });
-
-  // Notify other modules that language changed
   window.dispatchEvent(new CustomEvent("lang-changed", { detail: currentLang }));
 }
 
-/**
- * Translate a backend message string
- * Tries to match known patterns, falls back to original
- */
 export function translateBackendMessage(message) {
   if (!message) return "";
-
-  // Match backend message codes (English codes sent from Rust)
   const patterns = [
     { regex: /^precompress_jpeg$/, key: "msg-precompress-jpeg" },
     { regex: /^precompress_png$/, key: "msg-precompress-png" },
@@ -395,13 +333,9 @@ export function translateBackendMessage(message) {
     { regex: /^delete_fail:(.+)$/, key: "msg-delete-fail", extract: (m) => ({ e: m[1] }) },
     { regex: /^too_large:(.+)$/, key: "msg-too-large", extract: (m) => ({ e: m[1] }) },
   ];
-
   for (const p of patterns) {
     const m = message.match(p.regex);
-    if (m) {
-      return t(p.key, p.extract ? p.extract(m) : {});
-    }
+    if (m) return t(p.key, p.extract ? p.extract(m) : {});
   }
-
   return message;
 }
