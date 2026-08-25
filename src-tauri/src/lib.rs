@@ -548,7 +548,18 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
     drop(converting);
 
     std::thread::spawn(move || {
-        for src_path in &all_files {
+        // Scratch dir for non-destructive pre-compression; removed at the end of this batch.
+        let scratch_root = std::env::temp_dir().join(format!(
+            "pic2webp-scratch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::create_dir_all(&scratch_root);
+
+        for (idx, src_path) in all_files.iter().enumerate() {
             if cancel_flag.load(Ordering::Relaxed) {
                 break;
             }
@@ -613,65 +624,83 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
             let output_path = build_output_path(&filename, &request, parent, src_path);
             let output_str = output_path.to_string_lossy().to_string();
 
-            // ── Step 1: pre-compress JPEG ──
+            // ── Working file for pre-compression; defaults to the source and is never mutated ──
+            let mut work_path = Path::new(src_path).to_path_buf();
+
+            // Original size measured BEFORE any pre-compression, so savings are computed against the real source
+            let original_size = std::fs::metadata(src_path).map(|m| m.len() as i64).unwrap_or(0);
+            stats.total_original += original_size;
+
+            // ── Step 1: pre-compress JPEG into scratch (source file untouched) ──
             if (ext == "jpg" || ext == "jpeg") && jpegoptim.is_some() {
                 emit_progress(&app_handle, src_path, "compressing", "precompress_jpeg", 0, 0);
+                let work_dir = scratch_root.join(idx.to_string());
+                let _ = std::fs::create_dir_all(&work_dir);
                 let mut cmd = Command::new(jpegoptim.as_ref().unwrap());
-                cmd.arg("--strip-all").arg("--all-normal").arg(src_path);
-                run_cmd_timeout(&mut cmd, 60, &cancel_flag);
+                cmd.arg("--strip-all")
+                    .arg("--all-normal")
+                    .arg("--dest").arg(&work_dir)
+                    .arg(src_path);
+                let (code, _) = run_cmd_timeout(&mut cmd, 60, &cancel_flag);
                 if cancel_flag.load(Ordering::Relaxed) { continue; }
-            }
-
-            // ── Step 2: pre-compress PNG ──
-            if ext == "png" {
-                emit_progress(&app_handle, src_path, "compressing", "precompress_png", 0, 0);
-
-                let pngquant_output = if let (Some(tool), Some(oxi)) = (&pngquant, &oxipng) {
-                    let temp_dir = std::env::temp_dir();
-                    let stem = Path::new(src_path).file_stem().and_then(|s| s.to_str()).unwrap_or("temp");
-                    let mut tmp_path = temp_dir.join(format!("pic2webp-{}-{}", std::process::id(), stem));
-                    tmp_path.set_extension("pngquant.png");
-                    let tmp_str = tmp_path.to_string_lossy().to_string();
-
-                    let mut png_cmd = Command::new(tool);
-                    png_cmd.arg("--quality")
-                        .arg(format!("{}-100", quality.min(85)))
-                        .arg("--force")
-                        .arg("--output")
-                        .arg(&tmp_str)
-                        .arg(src_path);
-                    let (code, _) = run_cmd_timeout(&mut png_cmd, 90, &cancel_flag);
-
-                    if code == 0 && tmp_path.exists() {
-                        let mut oxi_cmd = Command::new(oxi);
-                        oxi_cmd.arg("--strip").arg("safe")
-                            .arg("--opt").arg("3")
-                            .arg("--out").arg(src_path)
-                            .arg(&tmp_str);
-                        run_cmd_timeout(&mut oxi_cmd, 120, &cancel_flag);
-                        let _ = std::fs::remove_file(&tmp_str);
-                        true
-                    } else {
-                        let _ = std::fs::remove_file(&tmp_str);
-                        false
-                    }
-                } else {
-                    false
-                };
-
-                if !pngquant_output {
-                    if let Some(ref oxi) = oxipng {
-                        let mut oxi_cmd = Command::new(oxi);
-                        oxi_cmd.arg("--strip").arg("safe")
-                            .arg("--opt").arg("1")
-                            .arg(src_path);
-                        run_cmd_timeout(&mut oxi_cmd, 120, &cancel_flag);
+                // jpegoptim writes into work_dir keeping the original basename
+                if code == 0 {
+                    if let Some(name) = Path::new(src_path).file_name() {
+                        let out = work_dir.join(name);
+                        if out.exists() { work_path = out; }
                     }
                 }
             }
 
-            let original_size = std::fs::metadata(src_path).map(|m| m.len() as i64).unwrap_or(0);
-            stats.total_original += original_size;
+            // ── Step 2: pre-compress PNG into scratch (source file untouched) ──
+            if ext == "png" {
+                emit_progress(&app_handle, src_path, "compressing", "precompress_png", 0, 0);
+                let work_dir = scratch_root.join(idx.to_string());
+                let _ = std::fs::create_dir_all(&work_dir);
+
+                if let (Some(qtool), Some(oxi)) = (&pngquant, &oxipng) {
+                    let qpath = work_dir.join("a.png");
+                    let mut png_cmd = Command::new(qtool);
+                    png_cmd.arg("--quality")
+                        .arg(format!("{}-100", quality.min(85)))
+                        .arg("--force")
+                        .arg("--output").arg(&qpath)
+                        .arg(src_path);
+                    let (code, _) = run_cmd_timeout(&mut png_cmd, 90, &cancel_flag);
+                    if cancel_flag.load(Ordering::Relaxed) { continue; }
+                    if code == 0 && qpath.exists() {
+                        // oxipng optimizes the scratch file in place (safe: it is our temp file)
+                        let mut oxi_cmd = Command::new(oxi);
+                        oxi_cmd.arg("--strip").arg("safe")
+                            .arg("--opt").arg("3")
+                            .arg(&qpath);
+                        run_cmd_timeout(&mut oxi_cmd, 120, &cancel_flag);
+                        if cancel_flag.load(Ordering::Relaxed) { continue; }
+                        if qpath.exists() { work_path = qpath; }
+                    } else {
+                        // pngquant bailed (e.g. truecolor/alpha) — fall back to oxipng onto a copy
+                        let opath = work_dir.join("b.png");
+                        let mut oxi_cmd = Command::new(oxi);
+                        oxi_cmd.arg("--strip").arg("safe")
+                            .arg("--opt").arg("1")
+                            .arg("--out").arg(&opath)
+                            .arg(src_path);
+                        run_cmd_timeout(&mut oxi_cmd, 120, &cancel_flag);
+                        if cancel_flag.load(Ordering::Relaxed) { continue; }
+                        if opath.exists() { work_path = opath; }
+                    }
+                } else if let Some(ref oxi) = oxipng {
+                    let opath = work_dir.join("b.png");
+                    let mut oxi_cmd = Command::new(oxi);
+                    oxi_cmd.arg("--strip").arg("safe")
+                        .arg("--opt").arg("1")
+                        .arg("--out").arg(&opath)
+                        .arg(src_path);
+                    run_cmd_timeout(&mut oxi_cmd, 120, &cancel_flag);
+                    if cancel_flag.load(Ordering::Relaxed) { continue; }
+                    if opath.exists() { work_path = opath; }
+                }
+            }
 
             // ── Step 3: decode ──
             emit_progress(&app_handle, src_path, "converting", "converting", 0, 0);
@@ -684,7 +713,7 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
                 let _ = app_handle.emit("convert-stats", &stats);
                 continue;
             }
-            let dims = ImageReader::open(src_path)
+            let dims = ImageReader::open(&work_path)
                 .ok()
                 .and_then(|r| r.into_dimensions().ok());
             if let Some((w, h)) = dims {
@@ -697,7 +726,7 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
                 }
             }
 
-            let mut img = match ImageReader::open(src_path)
+            let mut img = match ImageReader::open(&work_path)
                 .map_err(|e| format!("open_fail:{}", e))
                 .and_then(|r| r.decode().map_err(|e| format!("decode_fail:{}", e)))
             {
@@ -721,56 +750,79 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
             }
 
             // ── Encode ──
-            let encode_result = if let Some(target_kb) = request.target_size_kb {
-                encode_target_size(&img, target_kb, request.lossless)
-            } else {
-                encode_webp(&img, quality, request.lossless)
-            };
-
-            match encode_result {
-                Ok(webp_mem) => {
-                    let new_size = webp_mem.len() as i64;
-
-                    if new_size >= original_size && original_size > 0 && request.target_size_kb.is_none() {
-                        stats.skip_count += 1;
-                        stats.total_converted += original_size;
-                        emit_progress(&app_handle, src_path, "skipped", "skipped", 0, 0);
-                    } else if let Err(e) = std::fs::write(&output_str, &webp_mem) {
+            let use_avif = request.output_format == "avif";
+            let webp_mem: Vec<u8> = if use_avif {
+                match encode_avif(&img, quality) {
+                    Ok(b) => b,
+                    Err(e) => {
                         stats.fail_count += 1;
-                        emit_progress(&app_handle, src_path, "failed", &format!("write_fail:{}", e), 0, 0);
-                    } else {
-                        stats.total_converted += new_size;
-                        let saved_bytes = original_size - new_size;
-                        let saved_pct = if original_size > 0 {
-                            (saved_bytes * 100 / original_size) as i32
-                        } else { 0 };
-                        stats.success_count += 1;
-                        emit_progress(&app_handle, src_path, "done", &format!("saved:{}kb", new_size / 1024), saved_bytes, saved_pct);
-
-                        // AVIF "both" mode: also save .avif
-                        if request.output_format == "both" {
-                            let avif_path = format!("{}.avif", output_str.trim_end_matches(".webp"));
-                            if let Ok(avif_mem) = encode_avif(&img, quality) {
-                                let _ = std::fs::write(&avif_path, &avif_mem);
-                            }
-                        }
-
-                        if request.delete_source {
-                            if let Err(e) = std::fs::remove_file(src_path) {
-                                emit_progress(&app_handle, src_path, "done",
-                                    &format!("delete_fail:{}", e), saved_bytes, saved_pct);
-                            }
-                        }
+                        emit_progress(&app_handle, src_path, "failed", &e, 0, 0);
+                        let _ = app_handle.emit("convert-stats", &stats);
+                        continue;
                     }
                 }
-                Err(e) => {
-                    stats.fail_count += 1;
-                    emit_progress(&app_handle, src_path, "failed", &e, 0, 0);
+            } else if let Some(target_kb) = request.target_size_kb {
+                match encode_target_size(&img, target_kb, request.lossless) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        stats.fail_count += 1;
+                        emit_progress(&app_handle, src_path, "failed", &e, 0, 0);
+                        let _ = app_handle.emit("convert-stats", &stats);
+                        continue;
+                    }
+                }
+            } else {
+                match encode_webp(&img, quality, request.lossless) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        stats.fail_count += 1;
+                        emit_progress(&app_handle, src_path, "failed", &e, 0, 0);
+                        let _ = app_handle.emit("convert-stats", &stats);
+                        continue;
+                    }
+                }
+            };
+
+            // ── Write result ──
+            let new_size = webp_mem.len() as i64;
+
+            if new_size >= original_size && original_size > 0 && request.target_size_kb.is_none() {
+                stats.skip_count += 1;
+                stats.total_converted += original_size;
+                emit_progress(&app_handle, src_path, "skipped", "skipped", 0, 0);
+            } else if let Err(e) = std::fs::write(&output_str, &webp_mem) {
+                stats.fail_count += 1;
+                emit_progress(&app_handle, src_path, "failed", &format!("write_fail:{}", e), 0, 0);
+            } else {
+                stats.total_converted += new_size;
+                let saved_bytes = original_size - new_size;
+                let saved_pct = if original_size > 0 {
+                    (saved_bytes * 100 / original_size) as i32
+                } else { 0 };
+                stats.success_count += 1;
+                emit_progress(&app_handle, src_path, "done", &format!("saved:{}kb", new_size / 1024), saved_bytes, saved_pct);
+
+                // AVIF "both" mode: also save .avif
+                if request.output_format == "both" {
+                    let avif_path = format!("{}.avif", output_str.trim_end_matches(".webp"));
+                    if let Ok(avif_mem) = encode_avif(&img, quality) {
+                        let _ = std::fs::write(&avif_path, &avif_mem);
+                    }
+                }
+
+                if request.delete_source {
+                    if let Err(e) = std::fs::remove_file(src_path) {
+                        emit_progress(&app_handle, src_path, "done",
+                            &format!("delete_fail:{}", e), saved_bytes, saved_pct);
+                    }
                 }
             }
 
             let _ = app_handle.emit("convert-stats", &stats);
         }
+
+        // Clean up the batch scratch dir regardless of how the loop exited
+        let _ = std::fs::remove_dir_all(&scratch_root);
 
         stats.saved = stats.total_original - stats.total_converted;
         stats.saved_pct = if stats.total_original > 0 {
@@ -960,7 +1012,7 @@ fn emit_progress(app: &AppHandle, file: &str, status: &str, message: &str, saved
 // ─── CLI mode ───────────────────────────────────────────────────────
 
 pub fn run_cli(args: &[String]) {
-    eprintln!("Pic2WebP CLI mode — v1.6.3");
+    eprintln!("Pic2WebP CLI mode — v1.6.4");
     eprintln!("Usage: pic2webp --cli <files...> [--quality 80] [--lossless] [--resize 1920] [--output-dir dir]");
     eprintln!();
     

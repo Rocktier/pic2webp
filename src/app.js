@@ -496,6 +496,11 @@ async function retrySingleFile(path) {
   if (isConverting) return;
   const f = files.find((x) => x.path === path);
   if (!f) return;
+
+  // Enter converting state so the button becomes "cancel" and concurrent starts are blocked
+  isConverting = true;
+  updateConvertBtn();
+
   f.status = "pending";
   f.message = "";
   f.savedBytes = 0;
@@ -506,6 +511,9 @@ async function retrySingleFile(path) {
     await invoke("start_convert", { request: buildRequest([path], { recursive: false }) });
   } catch (e) {
     console.warn("Retry failed:", e);
+    isConverting = false;
+    updateConvertBtn();
+    alert(t("convert-failed") + ": " + e);
   }
 }
 
