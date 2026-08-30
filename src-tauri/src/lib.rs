@@ -32,7 +32,7 @@ pub struct ConvertRequest {
     #[serde(default)]
     pub target_size_kb: Option<u32>,
     #[serde(default = "default_output_format")]
-    pub output_format: String, // "webp" | "avif" | "both"
+    pub output_format: String, // "webp" | "both" ("avif" is accepted but not exposed in GUI)
     #[serde(default)]
     pub resize_enabled: bool,
     #[serde(default)]
@@ -189,6 +189,11 @@ fn get_file_size(path: String) -> Result<u64, String> {
     std::fs::metadata(&path)
         .map(|m| m.len())
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn is_dir(path: String) -> Result<bool, String> {
+    Ok(Path::new(&path).is_dir())
 }
 
 /// Generate a base64 thumbnail for a file
@@ -788,6 +793,7 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
 
             if new_size >= original_size && original_size > 0 && request.target_size_kb.is_none() {
                 stats.skip_count += 1;
+                // Skipped file keeps its original bytes (nothing written), so it contributes zero to savings.
                 stats.total_converted += original_size;
                 emit_progress(&app_handle, src_path, "skipped", "skipped", 0, 0);
             } else if let Err(e) = std::fs::write(&output_str, &webp_mem) {
@@ -795,7 +801,7 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
                 emit_progress(&app_handle, src_path, "failed", &format!("write_fail:{}", e), 0, 0);
             } else {
                 stats.total_converted += new_size;
-                let saved_bytes = original_size - new_size;
+                let saved_bytes = (original_size - new_size).max(0);
                 let saved_pct = if original_size > 0 {
                     (saved_bytes * 100 / original_size) as i32
                 } else { 0 };
@@ -846,7 +852,7 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
 fn build_output_name(stem: &str, ext: &str, naming_mode: &str, quality: i32) -> String {
     match naming_mode {
         "overwrite" => format!("{}.{}", stem, ext),
-        "webp-suffix" => format!("{}-{}.{}", stem, ext, ext),
+        "webp-suffix" => format!("{}-webp.{}", stem, ext),
         "q-suffix" => format!("{}-q{}.{}", stem, quality, ext),
         "ts-suffix" => {
             use std::time::{SystemTime, UNIX_EPOCH};
@@ -1012,7 +1018,7 @@ fn emit_progress(app: &AppHandle, file: &str, status: &str, message: &str, saved
 // ─── CLI mode ───────────────────────────────────────────────────────
 
 pub fn run_cli(args: &[String]) {
-    eprintln!("Pic2WebP CLI mode — v1.6.4");
+    eprintln!("Pic2WebP CLI mode — v1.6.5");
     eprintln!("Usage: pic2webp --cli <files...> [--quality 80] [--lossless] [--resize 1920] [--output-dir dir]");
     eprintln!();
     
@@ -1185,7 +1191,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             check_tools, start_convert, cancel_convert, force_close, get_file_size,
-            generate_thumbnail, watch_folder, stop_watch
+            is_dir, generate_thumbnail, watch_folder, stop_watch
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

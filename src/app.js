@@ -11,6 +11,7 @@ let selectedDir = null;
 let isConverting = false;
 let stats = null;
 let namingMode = "webp-suffix";
+let lastConvertRequest = null;
 
 // Thresholds
 const LARGE_FILE_BYTES = 50 * 1024 * 1024; // 50MB
@@ -123,6 +124,7 @@ function updateToolStatus() {
     { name: "jpegoptim", available: toolCheck.jpegoptim },
     { name: "pngquant", available: toolCheck.pngquant },
     { name: "oxipng", available: toolCheck.oxipng },
+    { name: "ffmpeg", available: toolCheck.ffmpeg },
   ];
 
   const anyAvailable = tools.some((tt) => tt.available);
@@ -164,13 +166,27 @@ async function checkFolderHint(paths) {
   if (!isTauri()) return;
   for (const p of paths) {
     try {
-      await invoke("get_file_size", { path: p });
+      const isFolder = await invoke("is_dir", { path: p });
+      if (isFolder) {
+        const hint = document.getElementById("folder-hint");
+        if (hint) hint.hidden = false;
+        return;
+      }
     } catch (_) {
-      const hint = document.getElementById("folder-hint");
-      if (hint) hint.hidden = false;
-      return;
+      // Ignore and continue checking other paths
     }
   }
+}
+
+function computeBaseDir(fileList) {
+  if (!chkStructure?.checked) return null;
+  if (fileList.length === 0) return null;
+  const firstParent = fileList[0].path.split(/[/\\]/).slice(0, -1).join('/');
+  const allSame = fileList.every((f) => {
+    const parent = f.path.split(/[/\\]/).slice(0, -1).join('/');
+    return parent === firstParent;
+  });
+  return allSame ? firstParent : null;
 }
 
 // ─── Batch / size warnings ────────────────────────────────────────────
@@ -290,7 +306,11 @@ function renderFiles() {
       invoke("generate_thumbnail", { path: f.path, size: 48 }).then((dataUrl) => {
         const imgEl = item.querySelector(".file-thumb");
         if (imgEl) imgEl.src = dataUrl;
-      }).catch(() => {});
+      }).catch((e) => {
+        const imgEl = item.querySelector(".file-thumb");
+        if (imgEl) imgEl.style.opacity = "0.3";
+        console.warn("Thumbnail failed for", f.path, e);
+      });
     }
 
     const retryBtn = f.status === "failed"
@@ -473,9 +493,11 @@ async function startConvert() {
   const retryAllBtn = document.getElementById("retry-all-btn");
   if (retryAllBtn) retryAllBtn.hidden = true;
 
-  const baseDir = files.length > 0 ? files[0].path.split(/[/\\]/).slice(0, -1).join('/') : null;
+  const baseDir = computeBaseDir(files);
+  const req = buildRequest(files.map((f) => f.path), { baseDir });
+  lastConvertRequest = req;
   try {
-    await invoke("start_convert", { request: buildRequest(files.map((f) => f.path), { baseDir }) });
+    await invoke("start_convert", { request: req });
   } catch (e) {
     for (const f of files) {
       f.status = "pending";
@@ -507,8 +529,11 @@ async function retrySingleFile(path) {
   f.savedPct = 0;
   renderFiles();
 
+  const req = lastConvertRequest
+    ? { ...lastConvertRequest, files: [path], recursive: false }
+    : buildRequest([path], { recursive: false });
   try {
-    await invoke("start_convert", { request: buildRequest([path], { recursive: false }) });
+    await invoke("start_convert", { request: req });
   } catch (e) {
     console.warn("Retry failed:", e);
     isConverting = false;
@@ -535,8 +560,11 @@ async function retryAllFailed() {
   isConverting = true;
   updateConvertBtn();
 
+  const req = lastConvertRequest
+    ? { ...lastConvertRequest, files: failedFiles.map((f) => f.path), recursive: false }
+    : buildRequest(failedFiles.map((f) => f.path), { recursive: false });
   try {
-    await invoke("start_convert", { request: buildRequest(failedFiles.map((f) => f.path), { recursive: false }) });
+    await invoke("start_convert", { request: req });
   } catch (e) {
     console.warn("Retry all failed:", e);
     isConverting = false;
@@ -588,6 +616,7 @@ clearBtn.addEventListener("click", () => {
   files = [];
   stats = null;
   statsPanel.hidden = true;
+  lastConvertRequest = null;
   const warn = document.getElementById("batch-warning");
   if (warn) warn.remove();
   renderFiles();

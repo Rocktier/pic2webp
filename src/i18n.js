@@ -28,7 +28,7 @@ const dict = {
     // Batch tips
     "tips-title": "批量处理提示",
     "tips-1": "逐张串行转换，批量拖入不会卡顿",
-    "tips-2": "单张建议 < 50MB，超大会占用较多内存",
+    "tips-2": "单张建议 < 100MB，超大会占用较多内存",
     "tips-3": "建议单次不超过 200 张，更多请分批处理",
 
     // Blog
@@ -74,6 +74,7 @@ const dict = {
     "status-done": "完成",
     "status-skipped": "跳过",
     "status-failed": "失败",
+    "converting_no_anim": "转换中（无动画支持）",
 
     // File size messages
     "saved-bytes": "节省 {size}",
@@ -161,7 +162,7 @@ const dict = {
     // Batch tips
     "tips-title": "Batch Tips",
     "tips-1": "Sequential processing — no lag on large batches",
-    "tips-2": "Keep each file under 50MB to avoid high memory use",
+    "tips-2": "Keep each file under 100MB to avoid high memory use",
     "tips-3": "Keep batches under 200 files for best performance",
 
     // Blog
@@ -207,6 +208,7 @@ const dict = {
     "status-done": "Done",
     "status-skipped": "Skipped",
     "status-failed": "Failed",
+    "converting_no_anim": "Converting (no animation support)",
 
     // File size messages
     "saved-bytes": "Saved {size}",
@@ -324,6 +326,7 @@ export function translateBackendMessage(message) {
     { regex: /^precompress_jpeg$/, key: "msg-precompress-jpeg" },
     { regex: /^precompress_png$/, key: "msg-precompress-png" },
     { regex: /^converting$/, key: "msg-converting" },
+    { regex: /^converting_no_anim$/, key: "converting_no_anim" },
     { regex: /^skipped$/, key: "msg-skipped" },
     { regex: /^saved:(\d+)kb$/, key: "msg-saved", extract: (m) => ({ n: m[1] }) },
     { regex: /^write_fail:(.+)$/, key: "msg-write-fail", extract: (m) => ({ e: m[1] }) },
