@@ -1018,7 +1018,7 @@ fn emit_progress(app: &AppHandle, file: &str, status: &str, message: &str, saved
 // ─── CLI mode ───────────────────────────────────────────────────────
 
 pub fn run_cli(args: &[String]) {
-    eprintln!("Pic2WebP CLI mode — v1.6.5");
+    eprintln!("Pic2WebP CLI mode — v1.6.6");
     eprintln!("Usage: pic2webp --cli <files...> [--quality 80] [--lossless] [--resize 1920] [--output-dir dir]");
     eprintln!();
     

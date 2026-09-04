@@ -1,7 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, ask } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { initLang, getLang, toggleLang, t, translateBackendMessage } from "./i18n.js";
 
 // ─── State ──────────────────────────────────────────────────────────
@@ -766,25 +765,6 @@ async function setupListeners() {
     // Pulse the stats panel to draw attention to results
     statsPanel.classList.add("pulse");
     setTimeout(() => statsPanel.classList.remove("pulse"), 1000);
-  });
-}
-
-// ─── Blog link — use opener plugin to open external URL ─────────────
-
-const blogLink = $("#blog-link");
-if (blogLink) {
-  blogLink.addEventListener("click", async (e) => {
-    e.preventDefault();
-    const url = blogLink.getAttribute("href");
-    if (isTauri()) {
-      try {
-        await openUrl(url);
-      } catch (err) {
-        console.warn("Failed to open URL:", err);
-      }
-    } else {
-      window.open(url, "_blank");
-    }
   });
 }
 

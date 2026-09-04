@@ -1,26 +1,11 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#e8792c"/>
-      <stop offset="100%" stop-color="#d45a0a"/>
-    </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.12"/>
-    </filter>
-  </defs>
+  <!-- ROCKTIER brand red background, Apple HIG ~80% fill -->
+  <rect x="50" y="50" width="412" height="412" rx="90" fill="#e64537"/>
+  <rect x="58" y="58" width="396" height="396" rx="82" fill="white" opacity="0.06"/>
 
-  <!-- Apple HIG: icon content fills ~80% of canvas, ~10% padding on each side -->
-  <rect x="50" y="50" width="412" height="412" rx="90" fill="url(#bg)"/>
+  <!-- Image icon – sun circle -->
+  <circle cx="176" cy="190" r="46" fill="white" opacity="0.94"/>
 
-  <!-- Inner elements scaled proportionally to fit padded background -->
-  <g transform="translate(50, 50) scale(0.8047)">
-    <rect x="120" y="96" width="160" height="210" rx="20" fill="white" opacity="0.28"/>
-    <rect x="232" y="178" width="160" height="210" rx="20" fill="white" filter="url(#shadow)"/>
-    <path d="M168 306 L168 220 M168 220 L148 244 M168 220 L188 244"
-          fill="none" stroke="white" stroke-width="18"
-          stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-    <path d="M266 296 L292 322 L346 262"
-          fill="none" stroke="#16a34a" stroke-width="22"
-          stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
+  <!-- Image icon – mountain range -->
+  <path d="M116 388 L220 256 l64 66 72 -100 92 166z" fill="white" opacity="0.94"/>
 </svg>
