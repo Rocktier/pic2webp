@@ -31,8 +31,34 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup npm mirror (China)
+        run: npm config set registry https://registry.npmmirror.com
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup cargo mirror (China)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          mkdir -p "$env:USERPROFILE\.cargo"
+          @"
+          [source.crates-io]
+          replace-with = "ustc"
+          [source.ustc]
+          registry = "https://mirrors.ustc.edu.cn/crates.io-index"
+          "@ | Out-File -FilePath "$env:USERPROFILE\.cargo\config.toml" -Encoding utf8
+        shell: pwsh
+
+      - name: Setup cargo mirror (China)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          mkdir -p ~/.cargo
+          cat > ~/.cargo/config.toml << 'EOF'
+          [source.crates-io]
+          replace-with = "ustc"
+          [source.ustc]
+          registry = "https://mirrors.ustc.edu.cn/crates.io-index"
+          EOF
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
