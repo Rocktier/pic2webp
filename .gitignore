@@ -26,6 +26,7 @@ Thumbs.db
 findings.md
 task_plan.md
 progress.md
+.trae/
 
 # ─── 工具临时文件 ───
 .playwright-cli/

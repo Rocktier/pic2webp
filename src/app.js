@@ -10,10 +10,6 @@ let selectedDir = null;
 let isConverting = false;
 let stats = null;
 let namingMode = "webp-suffix";
-let lastConvertRequest = null;
-
-// Thresholds
-const LARGE_FILE_BYTES = 50 * 1024 * 1024; // 50MB
 const BATCH_WARN_COUNT = 200;
 
 // ─── DOM refs ───────────────────────────────────────────────────────
@@ -494,7 +490,6 @@ async function startConvert() {
 
   const baseDir = computeBaseDir(files);
   const req = buildRequest(files.map((f) => f.path), { baseDir });
-  lastConvertRequest = req;
   try {
     await invoke("start_convert", { request: req });
   } catch (e) {
@@ -528,9 +523,7 @@ async function retrySingleFile(path) {
   f.savedPct = 0;
   renderFiles();
 
-  const req = lastConvertRequest
-    ? { ...lastConvertRequest, files: [path], recursive: false }
-    : buildRequest([path], { recursive: false });
+  const req = buildRequest([path], { recursive: false });
   try {
     await invoke("start_convert", { request: req });
   } catch (e) {
@@ -559,9 +552,7 @@ async function retryAllFailed() {
   isConverting = true;
   updateConvertBtn();
 
-  const req = lastConvertRequest
-    ? { ...lastConvertRequest, files: failedFiles.map((f) => f.path), recursive: false }
-    : buildRequest(failedFiles.map((f) => f.path), { recursive: false });
+  const req = buildRequest(failedFiles.map((f) => f.path), { recursive: false });
   try {
     await invoke("start_convert", { request: req });
   } catch (e) {
@@ -615,7 +606,6 @@ clearBtn.addEventListener("click", () => {
   files = [];
   stats = null;
   statsPanel.hidden = true;
-  lastConvertRequest = null;
   const warn = document.getElementById("batch-warning");
   if (warn) warn.remove();
   renderFiles();

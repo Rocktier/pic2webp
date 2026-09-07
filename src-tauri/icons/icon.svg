@@ -1,11 +1,11 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- ROCKTIER brand red background, Apple HIG ~80% fill -->
-  <rect x="50" y="50" width="412" height="412" rx="90" fill="#e64537"/>
-  <rect x="58" y="58" width="396" height="396" rx="82" fill="white" opacity="0.06"/>
+  <!-- Dark background, Apple HIG rounded rect -->
+  <rect x="32" y="32" width="448" height="448" rx="72" fill="#1a1a1a"/>
 
-  <!-- Image icon – sun circle -->
-  <circle cx="176" cy="190" r="46" fill="white" opacity="0.94"/>
+  <!-- White "W" letterform – bold geometric monogram for WebP -->
+  <path d="M 140 120 L 200 400 L 280 260 L 360 400 L 420 120"
+        stroke="white" stroke-width="60" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 
-  <!-- Image icon – mountain range -->
-  <path d="M116 388 L220 256 l64 66 72 -100 92 166z" fill="white" opacity="0.94"/>
+  <!-- Brand red accent dot -->
+  <circle cx="440" cy="130" r="22" fill="#e64537"/>
 </svg>
