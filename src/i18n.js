@@ -111,6 +111,8 @@ const dict = {
     "stop-watch": "Stop Watch",
     "guide-toggle": "Guide",
     "remove-file": "Remove",
+    "compare-side-by-side": "Side by Side",
+    "compare-slider": "Slider",
   },
 
   zh: {
@@ -315,6 +317,8 @@ const dict = {
     "stop-watch": "監視停止",
     "guide-toggle": "ガイド",
     "remove-file": "削除",
+    "compare-side-by-side": "サイド・バイ・サイド",
+    "compare-slider": "スライダー",
   },
 
   ko: {
@@ -416,6 +420,8 @@ const dict = {
     "stop-watch": "감시 중지",
     "guide-toggle": "가이드",
     "remove-file": "제거",
+    "compare-side-by-side": "나란히",
+    "compare-slider": "슬라이더",
   },
 
   de: {
@@ -517,6 +523,8 @@ const dict = {
     "stop-watch": "Überwachung stoppen",
     "guide-toggle": "Anleitung",
     "remove-file": "Entfernen",
+    "compare-side-by-side": "Nebeneinander",
+    "compare-slider": "Schieberegler",
   },
 
   es: {
@@ -618,6 +626,8 @@ const dict = {
     "stop-watch": "Detener vigilancia",
     "guide-toggle": "Guía",
     "remove-file": "Eliminar",
+    "compare-side-by-side": "Lado a Lado",
+    "compare-slider": "Deslizador",
   },
 
   pt: {
@@ -719,6 +729,8 @@ const dict = {
     "stop-watch": "Parar vigilância",
     "guide-toggle": "Guia",
     "remove-file": "Remover",
+    "compare-side-by-side": "Lado a Lado",
+    "compare-slider": "Deslizador",
   },
 
   ar: {
@@ -819,6 +831,8 @@ const dict = {
     "watch-folder": "مراقبة المجلد",
     "stop-watch": "إيقاف المراقبة",
     "guide-toggle": "الدليل",
+    "compare-side-by-side": "جنباً إلى جنب",
+    "compare-slider": "المزلق",
     "remove-file": "إزالة",
   },
 };

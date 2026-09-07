@@ -16,7 +16,7 @@ VERSION=$(node -p "require('./package.json').version")
 APP_NAME="Rocktier Pic2WebP.app"
 
 DMG_RW="/tmp/pic2webp-rw.dmg"
-DMG_OUT="/tmp/rocktier-pic2webp-signed.dmg"
+DMG_OUT="/tmp/pic2webp-signed.dmg"
 SIGNED_APP="${SCRIPT_DIR}/src-tauri/target/release/bundle/macos/${APP_NAME}"
 
 echo "=============================================="

@@ -12,6 +12,7 @@ let stats = null;
 let namingMode = "webp-suffix";
 let guideCollapsed = localStorage.getItem("pic2webp-guide-collapsed") !== "false";
 const BATCH_WARN_COUNT = 200;
+const LARGE_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
 // ─── DOM refs ───────────────────────────────────────────────────────
 
@@ -711,7 +712,7 @@ dropzone.addEventListener("click", async () => {
     const result = await open({
       multiple: true,
       filters: [
-        { name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "avif"] }
+        { name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp", "tiff"] }
       ]
     });
     if (result && Array.isArray(result)) {
