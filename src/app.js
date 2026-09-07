@@ -55,7 +55,6 @@ const chkWatermark = $("#chk-watermark");
 const watermarkText = $("#watermark-text");
 const chkStructure = $("#chk-structure");
 const chkExif = $("#chk-exif");
-const watchBtn = $("#watch-btn");
 const compareModal = $("#compare-modal");
 
 // ─── Build convert request ─────────────────────────────────────────
@@ -647,8 +646,6 @@ dirBtn.addEventListener("click", async () => {
       selectedDir = dir;
       outputDir.value = dir;
       dirClear.hidden = false;
-      const dirCopy = document.getElementById("dir-copy");
-      if (dirCopy) dirCopy.hidden = false;
     }
   } catch (e) {
     console.log("Dialog not available:", e);
@@ -659,8 +656,6 @@ dirClear.addEventListener("click", () => {
   selectedDir = null;
   outputDir.value = "";
   dirClear.hidden = true;
-  const dirCopy = document.getElementById("dir-copy");
-  if (dirCopy) dirCopy.hidden = true;
 });
 
 convertBtn.addEventListener("click", () => {
@@ -675,20 +670,6 @@ convertBtn.addEventListener("click", () => {
 const retryAllBtn = document.getElementById("retry-all-btn");
 if (retryAllBtn) {
   retryAllBtn.addEventListener("click", retryAllFailed);
-}
-
-// P1-6: Copy output dir path
-const dirCopy = document.getElementById("dir-copy");
-if (dirCopy) {
-  dirCopy.addEventListener("click", async () => {
-    if (!selectedDir) return;
-    try {
-      await navigator.clipboard.writeText(selectedDir);
-      const orig = dirCopy.textContent;
-      dirCopy.textContent = t("copied");
-      setTimeout(() => { dirCopy.textContent = orig; }, 1500);
-    } catch (_) {}
-  });
 }
 
 donateBtn.addEventListener("click", () => { donateModal.classList.add("visible"); });
@@ -707,14 +688,6 @@ document.addEventListener("keydown", (e) => {
 // ─── Tauri event listeners ──────────────────────────────────────────
 
 async function setupListeners() {
-  // Watch folder auto-convert
-  await listen("watch-auto-convert", (event) => {
-    const req = event.payload;
-    if (req && req.files) {
-      invoke("start_convert", { request: req }).catch((e) => console.warn("Watch convert failed:", e));
-    }
-  });
-
   // P0-2: Close window confirmation during conversion
   await listen("confirm-close", async () => {
     const yes = await ask(t("confirm-close"), { title: "Pic2WebP", kind: "warning" });
@@ -807,35 +780,6 @@ if (advancedToggle) {
 if (chkTargetSize) {
   chkTargetSize.addEventListener("change", () => {
     targetSizeInput.style.display = chkTargetSize.checked ? "inline-block" : "none";
-  });
-}
-
-// ── Watch folder ──
-let isWatching = false;
-if (watchBtn) {
-  watchBtn.addEventListener("click", async () => {
-    if (isWatching) {
-      await invoke("stop_watch").catch(() => {});
-      isWatching = false;
-      watchBtn.classList.remove("active");
-      watchBtn.textContent = t("watch-folder");
-      return;
-    }
-    if (!selectedDir) {
-      const dir = await open({ directory: true, title: t("watch-folder") });
-      if (!dir) return;
-      selectedDir = dir;
-      outputDir.value = dir;
-    }
-    const req = buildRequest([selectedDir]);
-    try {
-      await invoke("watch_folder", { dir: selectedDir, request: req });
-      isWatching = true;
-      watchBtn.classList.add("active");
-      watchBtn.textContent = t("stop-watch");
-    } catch (e) {
-      console.warn("Watch failed:", e);
-    }
   });
 }
 

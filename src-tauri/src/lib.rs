@@ -10,7 +10,6 @@ use std::time::Duration;
 use image::ImageReader;
 use tauri::{AppHandle, Emitter, Manager, State};
 use base64::Engine as _;
-use notify::Watcher;
 
 // ─── Data types ─────────────────────────────────────────────────────
 
@@ -89,7 +88,6 @@ pub struct AppState {
     pub tool_paths: HashMap<String, Option<String>>,
     pub cancel_flag: Arc<AtomicBool>,
     pub should_close: Arc<AtomicBool>,
-    pub watcher: Mutex<Option<notify::RecommendedWatcher>>,
 }
 
 // ─── Tool resolution ────────────────────────────────────────────────
@@ -212,62 +210,6 @@ fn generate_thumbnail(path: String, size: Option<u32>) -> Result<String, String>
         .map_err(|e| format!("encode_fail:{}", e))?;
     let base64 = base64::engine::general_purpose::STANDARD.encode(buf.into_inner());
     Ok(format!("data:image/webp;base64,{}", base64))
-}
-
-/// Start watching a folder for new images
-#[tauri::command]
-fn watch_folder(
-    app: AppHandle,
-    state: State<AppState>,
-    dir: String,
-    request: ConvertRequest,
-) -> Result<(), String> {
-    let (tx, rx) = mpsc::channel();
-    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        if let Ok(event) = res { let _ = tx.send(event); }
-    }).map_err(|e| format!("watch_init_fail:{}", e))?;
-
-    let watch_path = Path::new(&dir);
-    watcher.watch(&watch_path, notify::RecursiveMode::Recursive)
-        .map_err(|e| format!("watch_fail:{}", e))?;
-
-    // Store watcher
-    *state.watcher.lock().map_err(|e| e.to_string())? = Some(watcher);
-
-    let app_h = app.clone();
-    let cancel_w = state.cancel_flag.clone();
-    let supported = ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp", "tiff"];
-
-    std::thread::spawn(move || {
-        while !cancel_w.load(Ordering::Relaxed) {
-            match rx.recv_timeout(Duration::from_millis(500)) {
-                Ok(event) => {
-                    for path in &event.paths {
-                        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                            if supported.contains(&ext.to_lowercase().as_str()) {
-                                let path_str = path.to_string_lossy().to_string();
-                                let mut req = request.clone();
-                                req.files = vec![path_str.clone()];
-                                req.recursive = false;
-                                let _ = app_h.emit("watch-auto-convert", &req);
-                            }
-                        }
-                    }
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => continue,
-                Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            }
-        }
-    });
-
-    Ok(())
-}
-
-/// Stop watching
-#[tauri::command]
-fn stop_watch(state: State<AppState>) -> Result<(), String> {
-    *state.watcher.lock().map_err(|e| e.to_string())? = None;
-    Ok(())
 }
 
 /// Helper: unlock is_converting and return an Err with the given message.
@@ -946,7 +888,7 @@ fn emit_progress(app: &AppHandle, file: &str, status: &str, message: &str, saved
 // ─── CLI mode ───────────────────────────────────────────────────────
 
 pub fn run_cli(args: &[String]) {
-    eprintln!("Pic2WebP CLI mode — v1.6.9");
+    eprintln!("Pic2WebP CLI mode — v1.7.0");
     eprintln!("Usage: pic2webp --cli <files...> [--quality 80] [--lossless] [--resize 1920] [--output-dir dir]");
     eprintln!();
     
@@ -1101,7 +1043,6 @@ pub fn run() {
                 tool_paths,
                 cancel_flag: Arc::new(AtomicBool::new(false)),
                 should_close: Arc::new(AtomicBool::new(false)),
-                watcher: Mutex::new(None),
             });
             Ok(())
         })
@@ -1119,7 +1060,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             check_tools, start_convert, cancel_convert, force_close, get_file_size,
-            is_dir, generate_thumbnail, watch_folder, stop_watch
+            is_dir, generate_thumbnail
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

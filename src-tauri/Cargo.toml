@@ -1,6 +1,6 @@
 [package]
 name = "pic2webp"
-version = "1.6.9"
+version = "1.7.0"
 description = "图片转 WebP 工具 - Tauri 跨平台版"
 authors = ["danglei"]
 edition = "2024"
@@ -27,4 +27,3 @@ image = { version = "=0.25.5", default-features = false, features = ["jpeg", "pn
 webp = "0.3"
 base64 = "0.22"
 ab_glyph = "0.2"
-notify = "7"
