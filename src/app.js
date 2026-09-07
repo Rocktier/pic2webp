@@ -146,6 +146,7 @@ function addFiles(paths) {
   // Best-effort fetch file sizes for large-file detection
   fetchFileSizes();
   checkFolderHint(paths);
+  dropzone.classList.remove("empty");
 }
 
 async function checkFolderHint(paths) {
@@ -280,6 +281,7 @@ function renderFiles() {
       </div>`;
     fileCountText.textContent = t("file-count", { n: files.length });
     clearBtn.hidden = true;
+    dropzone.classList.add("empty");
     
     // Add collapse toggle listener
     const toggle = fileList.querySelector(".empty-state-toggle");
@@ -373,23 +375,13 @@ async function showCompare(filePath) {
   if (!content) return;
   content.innerHTML = "";
 
-  // Original image
-  const origImg = document.createElement("div");
-  origImg.style.position = "relative";
-  origImg.innerHTML = `<div class="compare-label">Original</div><img src="" id="compare-orig" />`;
-  content.appendChild(origImg);
-
-  // Converted image (thumbnail as preview)
-  const convImg = document.createElement("div");
-  convImg.style.position = "relative";
-  convImg.innerHTML = `<div class="compare-label">WebP</div><img src="" id="compare-conv" />`;
-  content.appendChild(convImg);
+  let currentMode = "side-by-side";
+  let origSrc = null;
+  let convSrc = null;
 
   // Load original thumbnail
   try {
-    const origThumb = await invoke("generate_thumbnail", { path: filePath, size: 400 });
-    const el = document.getElementById("compare-orig");
-    if (el) el.src = origThumb;
+    origSrc = await invoke("generate_thumbnail", { path: filePath, size: 600 });
   } catch (_) {}
 
   // Find converted file
@@ -398,10 +390,93 @@ async function showCompare(filePath) {
   const parent = filePath.replace(/[/\\][^/\\]+$/, "");
   const webpPath = `${parent}/${stem}-webp.webp`;
   try {
-    const convThumb = await invoke("generate_thumbnail", { path: webpPath, size: 400 });
-    const el = document.getElementById("compare-conv");
-    if (el) el.src = convThumb;
+    convSrc = await invoke("generate_thumbnail", { path: webpPath, size: 600 });
   } catch (_) {}
+
+  function renderSideBySide() {
+    content.innerHTML = "";
+    const origDiv = document.createElement("div");
+    origDiv.style.position = "relative";
+    origDiv.innerHTML = `<div class="compare-label">Original</div><img src="${origSrc || ''}" />`;
+    content.appendChild(origDiv);
+    const convDiv = document.createElement("div");
+    convDiv.style.position = "relative";
+    convDiv.innerHTML = `<div class="compare-label">WebP</div><img src="${convSrc || ''}" />`;
+    content.appendChild(convDiv);
+  }
+
+  function renderSlider() {
+    content.innerHTML = `
+      <div class="compare-overlay-wrap" id="compare-overlay">
+        <img src="${convSrc || ''}" alt="Converted" />
+        <div class="compare-top" id="compare-top">
+          <img src="${origSrc || ''}" alt="Original" />
+        </div>
+        <div class="compare-slider-line" id="compare-slider-line">
+          <div class="compare-slider-handle"></div>
+        </div>
+      </div>`;
+    
+    const overlay = document.getElementById("compare-overlay");
+    const top = document.getElementById("compare-top");
+    const line = document.getElementById("compare-slider-line");
+    if (!overlay || !top || !line) return;
+    
+    let isDragging = false;
+
+    function setPos(e) {
+      const rect = overlay.getBoundingClientRect();
+      let x = (e.clientX || e.touches?.[0]?.clientX) - rect.left;
+      x = Math.max(0, Math.min(x, rect.width));
+      const pct = (x / rect.width) * 100;
+      top.style.width = pct + "%";
+      line.style.left = pct + "%";
+    }
+
+    function onStart(e) {
+      isDragging = true;
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onEnd);
+      document.addEventListener("touchmove", onTouchMove, { passive: true });
+      document.addEventListener("touchend", onEnd);
+    }
+
+    function onMove(e) { if (isDragging) setPos(e); }
+    function onTouchMove(e) { if (isDragging) setPos(e); }
+    function onEnd() {
+      isDragging = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onEnd);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onEnd);
+    }
+
+    line.addEventListener("mousedown", onStart);
+    line.addEventListener("touchstart", onStart, { passive: true });
+    // Click to move
+    overlay.addEventListener("click", (e) => setPos(e));
+  }
+
+  // Initial render
+  renderSideBySide();
+
+  // Mode toggle buttons
+  const sbsBtn = document.getElementById("compare-mode-sbs");
+  const sliderBtn = document.getElementById("compare-mode-slider");
+  if (sbsBtn && sliderBtn) {
+    sbsBtn.addEventListener("click", () => {
+      sbsBtn.classList.add("active");
+      sliderBtn.classList.remove("active");
+      currentMode = "side-by-side";
+      renderSideBySide();
+    });
+    sliderBtn.addEventListener("click", () => {
+      sliderBtn.classList.add("active");
+      sbsBtn.classList.remove("active");
+      currentMode = "slider";
+      renderSlider();
+    });
+  }
 
   compareModal.classList.add("visible");
 }
@@ -446,6 +521,25 @@ function updateFileProgress(filePath, status, message, savedBytes, savedPct) {
     if (status === "compressing" || status === "converting") {
       item.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
+  }
+  updateProgress();
+}
+
+function updateProgress() {
+  const container = document.getElementById("progress-bar-container");
+  const fill = document.getElementById("progress-bar-fill");
+  const text = document.getElementById("progress-text");
+  if (!container || !fill || !text) return;
+  if (isConverting) {
+    const total = files.length;
+    const done = files.filter(f => f.status === 'done' || f.status === 'skipped' || f.status === 'failed').length;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    container.hidden = false;
+    fill.style.width = pct + "%";
+    text.textContent = `${done}/${total} (${pct}%)`;
+  } else {
+    container.hidden = true;
+    fill.style.width = "0%";
   }
 }
 

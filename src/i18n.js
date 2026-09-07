@@ -212,6 +212,8 @@ const dict = {
     "stop-watch": "停止监控",
     "guide-toggle": "使用指南",
     "remove-file": "移除",
+    "compare-side-by-side": "并排对比",
+    "compare-slider": "叠加对比",
   },
 
   ja: {
