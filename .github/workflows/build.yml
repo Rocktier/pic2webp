@@ -40,13 +40,14 @@ jobs:
       - name: Setup cargo mirror (China)
         if: matrix.platform == 'windows-latest'
         run: |
-          mkdir -p "$env:USERPROFILE\.cargo"
+          $dir = "$env:USERPROFILE\.cargo"
+          New-Item -ItemType Directory -Force $dir | Out-Null
           @"
           [source.crates-io]
-          replace-with = "ustc"
-          [source.ustc]
-          registry = "https://mirrors.ustc.edu.cn/crates.io-index"
-          "@ | Out-File -FilePath "$env:USERPROFILE\.cargo\config.toml" -Encoding utf8
+          replace-with = "tuna"
+          [source.tuna]
+          registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
+          "@ | Out-File -FilePath "$dir\config.toml" -Encoding utf8
         shell: pwsh
 
       - name: Setup cargo mirror (China)
@@ -55,9 +56,9 @@ jobs:
           mkdir -p ~/.cargo
           cat > ~/.cargo/config.toml << 'EOF'
           [source.crates-io]
-          replace-with = "ustc"
-          [source.ustc]
-          registry = "https://mirrors.ustc.edu.cn/crates.io-index"
+          replace-with = "tuna"
+          [source.tuna]
+          registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
           EOF
 
       - name: Cache Rust build
