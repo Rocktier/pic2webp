@@ -1,8 +1,8 @@
 [package]
 name = "pic2webp"
-version = "1.7.1"
-description = "图片转 WebP 工具 - Tauri 跨平台版"
-authors = ["danglei"]
+version = "1.8.0"
+description = "图片转 WebP 工具 - Rocktier 出品"
+authors = ["Rocktier <hello@rocktier.studio>"]
 edition = "2024"
 
 [lib]

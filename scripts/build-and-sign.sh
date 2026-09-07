@@ -1,5 +1,5 @@
 #!/bin/bash
-# Pic2WebP - 构建 + ad-hoc 签名
+# Rocktier Pic2WebP - 构建 + ad-hoc 签名
 # Tauri 构建完成后，对 DMG 内的 .app 做 ad-hoc codesign，
 # 消除 Gatekeeper "已损坏，无法打开" 拦截。
 #
@@ -13,14 +13,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
 VERSION=$(node -p "require('./package.json').version")
-APP_NAME="Pic2WebP.app"
+APP_NAME="Rocktier Pic2WebP.app"
 
 DMG_RW="/tmp/pic2webp-rw.dmg"
-DMG_OUT="/tmp/pic2webp-signed.dmg"
+DMG_OUT="/tmp/rocktier-pic2webp-signed.dmg"
 SIGNED_APP="${SCRIPT_DIR}/src-tauri/target/release/bundle/macos/${APP_NAME}"
 
 echo "=============================================="
-echo "  Pic2WebP 构建 + ad-hoc 签名"
+echo "  Rocktier Pic2WebP 构建 + ad-hoc 签名"
 echo "=============================================="
 echo ""
 

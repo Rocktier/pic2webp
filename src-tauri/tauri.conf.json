@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicovrc/tauri-settings-schema/refs/heads/v2/schema.json",
-  "productName": "Pic2WebP",
-  "version": "1.7.0",
-  "identifier": "com.danglei.pic2webp",
+  "productName": "Rocktier Pic2WebP",
+  "version": "1.8.0",
+  "identifier": "com.rocktier.pic2webp",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Pic2WebP",
+        "title": "Rocktier Pic2WebP",
         "width": 800,
         "height": 620,
         "minWidth": 720,

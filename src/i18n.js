@@ -13,7 +13,7 @@ const LANGUAGES = [
 
 const dict = {
   en: {
-    "subtitle": "JPG to WebP · Free · Local",
+    "subtitle": "JPG to WebP · A Rocktier tool",
     "dropzone-text": "Drop images here",
     "dropzone-hint": "or click to select · JPG / PNG / WebP / AVIF",
     "file-count": "{n} file(s) selected",
@@ -211,7 +211,7 @@ const dict = {
   },
 
   ja: {
-    "subtitle": "画像をWebPに変換 · 無料 · ローカル処理",
+    "subtitle": "画像をWebPに変換 · Rocktier ツール",
     "dropzone-text": "画像をここにドロップ",
     "dropzone-hint": "またはクリックで選択 · JPG / PNG / WebP / AVIF",
     "file-count": "{n} 個のファイルを選択",
@@ -409,7 +409,7 @@ const dict = {
   },
 
   de: {
-    "subtitle": "Bilder zu WebP · Kostenlos · Lokal",
+    "subtitle": "Bilder zu WebP · Ein Rocktier Tool",
     "dropzone-text": "Bilder hier ablegen",
     "dropzone-hint": "oder klicken zum Auswählen · JPG / PNG / WebP / AVIF",
     "file-count": "{n} Datei(en) ausgewählt",
@@ -508,7 +508,7 @@ const dict = {
   },
 
   es: {
-    "subtitle": "Imágenes a WebP · Gratis · Local",
+    "subtitle": "Imágenes a WebP · Una herramienta Rocktier",
     "dropzone-text": "Arrastra imágenes aquí",
     "dropzone-hint": "o haz clic para seleccionar · JPG / PNG / WebP / AVIF",
     "file-count": "{n} archivo(s) seleccionado(s)",
@@ -607,7 +607,7 @@ const dict = {
   },
 
   pt: {
-    "subtitle": "Imagens para WebP · Grátis · Local",
+    "subtitle": "Imagens para WebP · Uma ferramenta Rocktier",
     "dropzone-text": "Arraste imagens aqui",
     "dropzone-hint": "ou clique para selecionar · JPG / PNG / WebP / AVIF",
     "file-count": "{n} arquivo(s) selecionado(s)",
@@ -706,7 +706,7 @@ const dict = {
   },
 
   ar: {
-    "subtitle": "تحويل الصور إلى WebP · مجاني · معالجة محلية",
+    "subtitle": "تحويل الصور إلى WebP · أداة Rocktier",
     "dropzone-text": "أسقط الصور هنا",
     "dropzone-hint": "أو انقر لاختيار الملفات · JPG / PNG / WebP / AVIF",
     "file-count": "تم اختيار {n} ملف",
