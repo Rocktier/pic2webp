@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, ask } from "@tauri-apps/plugin-dialog";
-import { initLang, getLang, toggleLang, t, translateBackendMessage } from "./i18n.js";
+import { initLang, getLang, setLang, t, translateBackendMessage, getLanguages } from "./i18n.js";
 
 // ─── State ──────────────────────────────────────────────────────────
 
@@ -40,8 +40,6 @@ const donateBtn = $("#donate-btn");
 const donateModal = $("#donate-modal");
 const modalClose = $("#modal-close");
 const langToggle = $("#lang-toggle");
-const langZh = $("#lang-zh");
-const langEn = $("#lang-en");
 const themeToggle = $("#theme-toggle");
 const chkLossless = $("#chk-lossless");
 const chkTargetSize = $("#chk-target-size");
@@ -762,8 +760,18 @@ async function setupListeners() {
 
 function updateLangToggle() {
   const lang = getLang();
-  langZh.classList.toggle("active", lang === "zh");
-  langEn.classList.toggle("active", lang === "en");
+  const langs = getLanguages();
+  if (!langToggle) return;
+  // Only populate options once
+  if (langToggle.options.length === 0) {
+    langs.forEach((l) => {
+      const opt = document.createElement("option");
+      opt.value = l.code;
+      opt.textContent = l.label;
+      langToggle.appendChild(opt);
+    });
+  }
+  langToggle.value = lang;
 }
 
 // ── Dark mode ──
@@ -839,8 +847,8 @@ if (compareModal) {
 }
 
 if (langToggle) {
-  langToggle.addEventListener("click", () => {
-    toggleLang();
+  langToggle.addEventListener("change", () => {
+    setLang(langToggle.value);
     updateLangToggle();
     // Re-render file list to update dynamic text
     renderFiles();

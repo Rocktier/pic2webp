@@ -415,16 +415,19 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ───────── 语言 / 主题 切换 ───────── */
 .lang-toggle {
-  display: flex; align-items: center; gap: 0;
-  background: var(--bg-card); border: 1px solid var(--border); border-radius: 100px;
-  padding: 3px; cursor: pointer; transition: all .2s; flex-shrink: 0;
+  font-size: 10px; font-weight: 500; padding: 3px 20px 3px 9px; border-radius: 100px;
+  background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+  cursor: pointer; flex-shrink: 0; outline: none; appearance: none;
+  -webkit-appearance: none; -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 6 4-6z' fill='rgba(0,0,0,0.5)'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 6px center; background-size: 6px;
+  transition: all .2s;
 }
 .lang-toggle:hover { border-color: var(--border-hover); }
-.lang-toggle span {
-  font-size: 10px; font-weight: 500; padding: 2px 9px; border-radius: 100px;
-  color: var(--text-tertiary); letter-spacing: 0.03em;
+.lang-toggle option { font-size: 11px; color: var(--text-primary); background: var(--bg-primary); }
+[data-theme="dark"] .lang-toggle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 6 4-6z' fill='rgba(255,255,255,0.6)'/%3E%3C/svg%3E");
 }
-.lang-toggle span.active { background: var(--accent); color: var(--accent-text); }
 
 .theme-toggle {
   background: none; border: none; border-radius: 10px; padding: 4px 7px;
@@ -478,8 +481,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
       <div class="logo">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <rect x="1.5" y="1.5" width="21" height="21" rx="3.5" fill="var(--red)"/>
-          <path d="M 7 6 L 9 19 L 13 12 L 17 19 L 20 6" stroke="var(--accent-text)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <circle cx="21" cy="6" r="1" fill="var(--red)"/>
+          <path d="M 7 7 L 9 17 L 13 12 L 17 17 L 20 7" stroke="var(--accent-text)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <circle cx="21" cy="5" r="1" fill="var(--red)"/>
         </svg>
         <span class="brand-dot"></span>
         <div class="logo-text">
@@ -489,10 +492,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
       </div>
       <div class="header-controls">
           <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">🌙</button>
-          <div class="lang-toggle" id="lang-toggle">
-        <span id="lang-zh" class="active">中</span>
-        <span id="lang-en">EN</span>
-      </div>
+          <select class="lang-toggle" id="lang-toggle"></select>
     </header>
 
     <!-- ===== Main layout ===== -->
