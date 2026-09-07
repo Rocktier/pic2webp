@@ -109,6 +109,8 @@ const dict = {
     "strip-exif": "Strip EXIF",
     "watch-folder": "Watch Folder",
     "stop-watch": "Stop Watch",
+    "guide-toggle": "Guide",
+    "remove-file": "Remove",
   },
 
   zh: {
@@ -208,6 +210,8 @@ const dict = {
     "strip-exif": "清除 EXIF",
     "watch-folder": "监控文件夹",
     "stop-watch": "停止监控",
+    "guide-toggle": "使用指南",
+    "remove-file": "移除",
   },
 
   ja: {
@@ -307,6 +311,8 @@ const dict = {
     "strip-exif": "EXIFを削除",
     "watch-folder": "フォルダ監視",
     "stop-watch": "監視停止",
+    "guide-toggle": "ガイド",
+    "remove-file": "削除",
   },
 
   ko: {
@@ -406,6 +412,8 @@ const dict = {
     "strip-exif": "EXIF 제거",
     "watch-folder": "폴더 감시",
     "stop-watch": "감시 중지",
+    "guide-toggle": "가이드",
+    "remove-file": "제거",
   },
 
   de: {
@@ -505,6 +513,8 @@ const dict = {
     "strip-exif": "EXIF entfernen",
     "watch-folder": "Ordner überwachen",
     "stop-watch": "Überwachung stoppen",
+    "guide-toggle": "Anleitung",
+    "remove-file": "Entfernen",
   },
 
   es: {
@@ -604,6 +614,8 @@ const dict = {
     "strip-exif": "Eliminar EXIF",
     "watch-folder": "Vigilar carpeta",
     "stop-watch": "Detener vigilancia",
+    "guide-toggle": "Guía",
+    "remove-file": "Eliminar",
   },
 
   pt: {
@@ -703,6 +715,8 @@ const dict = {
     "strip-exif": "Remover EXIF",
     "watch-folder": "Vigiar pasta",
     "stop-watch": "Parar vigilância",
+    "guide-toggle": "Guia",
+    "remove-file": "Remover",
   },
 
   ar: {
@@ -802,6 +816,8 @@ const dict = {
     "strip-exif": "إزالة EXIF",
     "watch-folder": "مراقبة المجلد",
     "stop-watch": "إيقاف المراقبة",
+    "guide-toggle": "الدليل",
+    "remove-file": "إزالة",
   },
 };
 

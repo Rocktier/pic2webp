@@ -10,6 +10,7 @@ let selectedDir = null;
 let isConverting = false;
 let stats = null;
 let namingMode = "webp-suffix";
+let guideCollapsed = localStorage.getItem("pic2webp-guide-collapsed") !== "false";
 const BATCH_WARN_COUNT = 200;
 
 // ─── DOM refs ───────────────────────────────────────────────────────
@@ -243,36 +244,52 @@ function renderFiles() {
 
   if (files.length === 0) {
     fileList.innerHTML = `
-      <div class="empty-state">
-        <div class="info-section">
-          <p data-i18n="why-webp">${t("why-webp")}</p>
-          <ul>
-            <li data-i18n="why-1">${t("why-1")}</li>
-            <li data-i18n="why-2">${t("why-2")}</li>
-            <li data-i18n="why-3">${t("why-3")}</li>
-            <li data-i18n="why-4">${t("why-4")}</li>
-          </ul>
+      <div class="empty-state${guideCollapsed ? ' collapsed' : ''}" id="empty-state">
+        <div class="empty-state-toggle">
+          <span class="chevron">▾</span>
+          <span data-i18n="guide-toggle">${t("guide-toggle")}</span>
         </div>
-        <div class="info-section">
-          <p data-i18n="how-title">${t("how-title")}</p>
-          <ul>
-            <li data-i18n="how-1">${t("how-1")}</li>
-            <li data-i18n="how-2">${t("how-2")}</li>
-            <li data-i18n="how-3">${t("how-3")}</li>
-            <li data-i18n="how-4">${t("how-4")}</li>
-          </ul>
-        </div>
-        <div class="info-section">
-          <p data-i18n="tips-title">${t("tips-title")}</p>
-          <ul>
-            <li data-i18n="tips-1">${t("tips-1")}</li>
-            <li data-i18n="tips-2">${t("tips-2")}</li>
-            <li data-i18n="tips-3">${t("tips-3")}</li>
-          </ul>
+        <div class="empty-state-body">
+          <div class="info-section">
+            <p data-i18n="why-webp">${t("why-webp")}</p>
+            <ul>
+              <li data-i18n="why-1">${t("why-1")}</li>
+              <li data-i18n="why-2">${t("why-2")}</li>
+              <li data-i18n="why-3">${t("why-3")}</li>
+              <li data-i18n="why-4">${t("why-4")}</li>
+            </ul>
+          </div>
+          <div class="info-section">
+            <p data-i18n="how-title">${t("how-title")}</p>
+            <ul>
+              <li data-i18n="how-1">${t("how-1")}</li>
+              <li data-i18n="how-2">${t("how-2")}</li>
+              <li data-i18n="how-3">${t("how-3")}</li>
+              <li data-i18n="how-4">${t("how-4")}</li>
+            </ul>
+          </div>
+          <div class="info-section">
+            <p data-i18n="tips-title">${t("tips-title")}</p>
+            <ul>
+              <li data-i18n="tips-1">${t("tips-1")}</li>
+              <li data-i18n="tips-2">${t("tips-2")}</li>
+              <li data-i18n="tips-3">${t("tips-3")}</li>
+            </ul>
+          </div>
         </div>
       </div>`;
     fileCountText.textContent = t("file-count", { n: files.length });
     clearBtn.hidden = true;
+    
+    // Add collapse toggle listener
+    const toggle = fileList.querySelector(".empty-state-toggle");
+    if (toggle) {
+      toggle.addEventListener("click", () => {
+        const es = document.getElementById("empty-state");
+        es.classList.toggle("collapsed");
+        localStorage.setItem("pic2webp-guide-collapsed", es.classList.contains("collapsed"));
+      });
+    }
     return;
   }
 
@@ -306,6 +323,7 @@ function renderFiles() {
     const retryBtn = f.status === "failed"
       ? `<button class="retry-btn" data-path="${f.path}" title="${t("retry")}">↻</button>`
       : "";
+    const deleteBtn = `<button class="file-delete-btn" data-path="${f.path}" title="${t("remove-file")}">×</button>`;
 
     item.innerHTML = `
       <img class="file-thumb" src="${thumbSrc}" alt="" />
@@ -315,6 +333,7 @@ function renderFiles() {
       </div>
       <span class="file-status status-${f.status}">${statusLabel(f.status)}</span>
       ${retryBtn}
+      ${deleteBtn}
     `;
 
     fileList.appendChild(item);
@@ -324,6 +343,20 @@ function renderFiles() {
       retry.addEventListener("click", (e) => {
         e.stopPropagation();
         retrySingleFile(retry.dataset.path);
+      });
+    }
+
+    // Delete button
+    const del = item.querySelector(".file-delete-btn");
+    if (del) {
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const idx = files.findIndex((x) => x.path === del.dataset.path);
+        if (idx !== -1) {
+          files.splice(idx, 1);
+          renderFiles();
+          updateConvertBtn();
+        }
       });
     }
 
@@ -677,6 +710,32 @@ document.addEventListener("keydown", (e) => {
   if (convertBtn && !convertBtn.disabled) startConvert();
 });
 
+// Keyboard shortcuts
+document.addEventListener("keydown", (e) => {
+  const tag = e.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  
+  // Escape close compare modal
+  if (e.key === "Escape") {
+    if (compareModal.classList.contains("visible")) {
+      compareModal.classList.remove("visible");
+    }
+  }
+  
+  // Cmd+Backspace clear all files
+  if ((e.metaKey || e.ctrlKey) && e.key === "Backspace") {
+    if (files.length > 0) {
+      files = [];
+      stats = null;
+      statsPanel.hidden = true;
+      const warn = document.getElementById("batch-warning");
+      if (warn) warn.remove();
+      renderFiles();
+      updateConvertBtn();
+    }
+  }
+});
+
 // ─── Tauri event listeners ──────────────────────────────────────────
 
 async function setupListeners() {
@@ -739,21 +798,56 @@ function updateLangToggle() {
   langToggle.value = lang;
 }
 
-// ── Dark mode ──
+// ── Dark mode with system theme follow ──
 if (themeToggle) {
   const savedTheme = localStorage.getItem("pic2webp-theme");
-  if (savedTheme === "dark") {
-    document.documentElement.setAttribute("data-theme", "dark");
-    themeToggle.textContent = "☀️";
-  }
-  themeToggle.addEventListener("click", () => {
-    const cur = document.documentElement.getAttribute("data-theme");
-    if (cur === "dark") {
+  const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+  
+  function applyTheme(useDark) {
+    if (useDark) {
+      document.documentElement.setAttribute("data-theme", "dark");
+      themeToggle.textContent = "☀️";
+    } else {
       document.documentElement.removeAttribute("data-theme");
       themeToggle.textContent = "🌙";
+    }
+  }
+  
+  function applySystemTheme() {
+    applyTheme(darkModeMedia.matches);
+    themeToggle.textContent = "🌓";
+  }
+  
+  if (savedTheme === "dark") {
+    applyTheme(true);
+  } else if (savedTheme === "light") {
+    applyTheme(false);
+  } else {
+    // No saved preference, follow system
+    applySystemTheme();
+  }
+  
+  darkModeMedia.addEventListener("change", () => {
+    if (!localStorage.getItem("pic2webp-theme")) {
+      applySystemTheme();
+    }
+  });
+  
+  themeToggle.addEventListener("click", () => {
+    const saved = localStorage.getItem("pic2webp-theme");
+    
+    if (saved === "dark") {
+      // dark → light
+      applyTheme(false);
+      themeToggle.textContent = "🌙";
       localStorage.setItem("pic2webp-theme", "light");
+    } else if (saved === "light") {
+      // light → auto (system follow)
+      localStorage.removeItem("pic2webp-theme");
+      applySystemTheme();
     } else {
-      document.documentElement.setAttribute("data-theme", "dark");
+      // auto → dark
+      applyTheme(true);
       themeToggle.textContent = "☀️";
       localStorage.setItem("pic2webp-theme", "dark");
     }

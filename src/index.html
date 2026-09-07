@@ -207,8 +207,21 @@ header {
   content: ""; display: inline-block; width: 4px; height: 4px; border-radius: 50%;
   background: var(--accent); margin-right: 8px; vertical-align: middle; opacity: 0.6;
 }
-
-/* 文件行 */
+	
+/* 空态折叠 */
+.empty-state-toggle {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 11px; color: var(--text-tertiary); font-weight: 500;
+  padding: 2px 0; width: 100%; user-select: none;
+}
+.empty-state-toggle:hover { color: var(--accent); }
+.empty-state-toggle .chevron {
+  transition: transform .2s; display: inline-block; font-size: 10px;
+}
+.empty-state.collapsed .empty-state-body { display: none; }
+.empty-state.collapsed .empty-state-toggle { margin-bottom: 0; }
+	
+	/* 文件行 */
 .file-item {
   display: flex; align-items: center; gap: 10px;
   padding: 7px 10px;
@@ -359,8 +372,18 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .retry-btn { flex-shrink: 0; border: none; background: none; color: var(--text-tertiary); cursor: pointer; font-size: 14px; padding: 2px 7px; border-radius: 8px; }
 .retry-btn:hover { color: var(--accent); background: var(--bg-card); }
-
-/* ───────── 高级选项 ───────── */
+	
+/* 单文件删除 */
+.file-delete-btn {
+  flex-shrink: 0; border: none; background: none;
+  color: var(--text-tertiary); cursor: pointer;
+  font-size: 14px; padding: 2px 6px; border-radius: 8px;
+  line-height: 1; margin-left: 2px; opacity: 0; transition: opacity .15s;
+}
+.file-item:hover .file-delete-btn { opacity: 1; }
+.file-delete-btn:hover { color: var(--danger); background: var(--bg-card-hover); }
+	
+	/* ───────── 高级选项 ───────── */
 .advanced-toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 .advanced-toggle:hover { color: var(--accent); }
 .advanced-toggle .chevron { transition: transform .2s; display: inline-block; }
@@ -476,32 +499,38 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
         </div>
         <div class="hint warn" id="folder-hint" hidden data-i18n="folder-hint">检测到文件夹，但未开启递归子目录。勾选「递归子目录」以处理其中的图片。</div>
         <div id="file-list" class="file-list">
-          <div class="empty-state">
-            <div class="info-section">
-              <p data-i18n="why-webp">为什么要用 WebP？</p>
-              <ul>
-                <li data-i18n="why-1">Google 开发的现代图片格式</li>
-                <li data-i18n="why-2">同等画质体积减少 25-50%</li>
-                <li data-i18n="why-3">支持透明通道，替代 PNG</li>
-                <li data-i18n="why-4">Chrome / Edge / Firefox / Safari 全兼容</li>
-              </ul>
+          <div class="empty-state collapsed" id="empty-state">
+            <div class="empty-state-toggle">
+              <span class="chevron">▾</span>
+              <span data-i18n="guide-toggle">使用指南</span>
             </div>
-            <div class="info-section">
-              <p data-i18n="how-title">如何实现？</p>
-              <ul>
-                <li data-i18n="how-1">内置 WebP 编码引擎，无需安装任何工具</li>
-                <li data-i18n="how-2">可选 jpegoptim / pngquant 预压缩，进一步减小体积</li>
-                <li data-i18n="how-3">所有处理本地完成，不上传任何文件</li>
-                <li data-i18n="how-4">转换后自动统计节省空间</li>
-              </ul>
-            </div>
-            <div class="info-section">
-              <p data-i18n="tips-title">批量处理提示</p>
-              <ul>
-                <li data-i18n="tips-1">逐张串行转换，批量拖入不会卡顿</li>
-                <li data-i18n="tips-2">单张建议 &lt; 100MB，超大会占用较多内存</li>
-                <li data-i18n="tips-3">建议单次不超过 200 张，更多请分批处理</li>
-              </ul>
+            <div class="empty-state-body">
+              <div class="info-section">
+                <p data-i18n="why-webp">为什么要用 WebP？</p>
+                <ul>
+                  <li data-i18n="why-1">Google 开发的现代图片格式</li>
+                  <li data-i18n="why-2">同等画质体积减少 25-50%</li>
+                  <li data-i18n="why-3">支持透明通道，替代 PNG</li>
+                  <li data-i18n="why-4">Chrome / Edge / Firefox / Safari 全兼容</li>
+                </ul>
+              </div>
+              <div class="info-section">
+                <p data-i18n="how-title">如何实现？</p>
+                <ul>
+                  <li data-i18n="how-1">内置 WebP 编码引擎，无需安装任何工具</li>
+                  <li data-i18n="how-2">可选 jpegoptim / pngquant 预压缩，进一步减小体积</li>
+                  <li data-i18n="how-3">所有处理本地完成，不上传任何文件</li>
+                  <li data-i18n="how-4">转换后自动统计节省空间</li>
+                </ul>
+              </div>
+              <div class="info-section">
+                <p data-i18n="tips-title">批量处理提示</p>
+                <ul>
+                  <li data-i18n="tips-1">逐张串行转换，批量拖入不会卡顿</li>
+                  <li data-i18n="tips-2">单张建议 &lt; 100MB，超大会占用较多内存</li>
+                  <li data-i18n="tips-3">建议单次不超过 200 张，更多请分批处理</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -563,7 +592,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
             <button class="pill-btn" data-value="q-suffix">-q80</button>
             <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">时间戳</button>
           </div>
-          
+          <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ 同名 .webp 文件将被直接覆盖，不可恢复</div>
         </div>
 
 
