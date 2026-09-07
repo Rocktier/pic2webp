@@ -36,9 +36,7 @@ const statSuccess = $("#stat-success");
 const statSkip = $("#stat-skip");
 const statFail = $("#stat-fail");
 const statSaved = $("#stat-saved");
-const donateBtn = $("#donate-btn");
-const donateModal = $("#donate-modal");
-const modalClose = $("#modal-close");
+
 const langToggle = $("#lang-toggle");
 const themeToggle = $("#theme-toggle");
 const chkLossless = $("#chk-lossless");
@@ -672,16 +670,10 @@ if (retryAllBtn) {
   retryAllBtn.addEventListener("click", retryAllFailed);
 }
 
-donateBtn.addEventListener("click", () => { donateModal.classList.add("visible"); });
-modalClose.addEventListener("click", () => { donateModal.classList.remove("visible"); });
-donateModal.addEventListener("click", (e) => { if (e.target === donateModal) donateModal.classList.remove("visible"); });
-
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
-  // P2: Don't trigger conversion when typing in inputs, textareas, or when modal is visible
   const tag = e.target.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-  if (donateModal && donateModal.classList.contains("visible")) return;
   if (convertBtn && !convertBtn.disabled) startConvert();
 });
 
