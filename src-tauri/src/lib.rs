@@ -60,6 +60,9 @@ pub struct FileProgress {
     pub message: String,
     pub saved_bytes: i64,
     pub saved_pct: i32,
+    /// 实际写入的输出文件路径（done 时携带，供前端“对比”功能使用）
+    #[serde(default)]
+    pub output_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -330,11 +333,19 @@ fn apply_watermark(img: &mut image::DynamicImage, text: &str, opacity: f32) {
                 let gy = bounds.min.y as i32 + px_y as i32;
                 if gx >= 0 && gy >= 0 && (gx as u32) < w && (gy as u32) < h {
                     let idx = (gy as usize * w as usize + gx as usize) * 4;
-                    let alpha = (v * opacity).clamp(0.0, 1.0);
-                    raw[idx] = ((raw[idx] as f32) * (1.0 - alpha) + 255.0 * alpha) as u8;
-                    raw[idx + 1] = ((raw[idx + 1] as f32) * (1.0 - alpha) + 255.0 * alpha) as u8;
-                    raw[idx + 2] = ((raw[idx + 2] as f32) * (1.0 - alpha) + 255.0 * alpha) as u8;
-                    raw[idx + 3] = 255;
+                    // 标准 over 合成：以白色为水印源，按覆盖率和透明度混入。
+                    // 不再把 alpha 强制写 255（旧行为会在透明 PNG 上留白色毛边）。
+                    let src_a = (v * opacity).clamp(0.0, 1.0);
+                    if src_a <= 0.0 { return; }
+                    let dst_a = raw[idx + 3] as f32 / 255.0;
+                    let out_a = src_a + dst_a * (1.0 - src_a);
+                    if out_a <= 0.0 { return; }
+                    for c in 0..3 {
+                        let dst_c = raw[idx + c] as f32 / 255.0;
+                        let out_c = (1.0 * src_a + dst_c * dst_a * (1.0 - src_a)) / out_a;
+                        raw[idx + c] = (out_c * 255.0).round().clamp(0.0, 255.0) as u8;
+                    }
+                    raw[idx + 3] = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
                 }
             });
         }
@@ -392,28 +403,37 @@ fn encode_webp(img: &image::DynamicImage, quality: i32, lossless: bool) -> Resul
     }
 }
 
-/// Encode with target size (binary search quality)
-fn encode_target_size(img: &image::DynamicImage, target_kb: u32, lossless: bool) -> Result<Vec<u8>, String> {
+/// Encode with target size (binary search over quality).
+/// 返回 (编码结果, 是否达成了目标体积)。目标不可达时返回**体积最小**的那次编码，
+/// 而不是初始 q80 的结果——旧行为会静默输出比可达最小值大一个数量级的文件。
+fn encode_target_size(img: &image::DynamicImage, target_kb: u32, lossless: bool) -> Result<(Vec<u8>, bool), String> {
     if lossless {
-        return encode_webp(img, 100, true);
+        return Ok((encode_webp(img, 100, true)?, false));
     }
     let target_bytes = (target_kb as u64) * 1024;
+    let mut best: Option<Vec<u8>> = None;       // ≤ 目标的最大质量结果
+    let mut fallback: Option<Vec<u8>> = None;   // 超出目标时体积最小的一次结果
     let mut lo = 10i32;
     let mut hi = 100i32;
-    let mut best = encode_webp(img, 80, false)?;
-    
-    for _ in 0..6 {
-        if lo >= hi { break; }
+
+    while lo <= hi {
         let mid = (lo + hi) / 2;
         let encoded = encode_webp(img, mid, false)?;
         if encoded.len() as u64 <= target_bytes {
-            best = encoded;
-            lo = mid + 1; // Try higher quality
+            best = Some(encoded);
+            lo = mid + 1;
         } else {
-            hi = mid - 1; // Need lower quality
+            if fallback.as_ref().map_or(true, |f| encoded.len() < f.len()) {
+                fallback = Some(encoded);
+            }
+            hi = mid - 1;
         }
     }
-    Ok(best)
+    match (best, fallback) {
+        (Some(b), _) => Ok((b, true)),
+        (None, Some(f)) => Ok((f, false)),
+        (None, None) => encode_webp(img, 80, false).map(|b| (b, false)),
+    }
 }
 
 /// Encode to AVIF using image crate
@@ -486,7 +506,6 @@ fn convert_single_file(
             let out_str = out_path.to_string_lossy().to_string();
 
             let original_size = std::fs::metadata(src_path).map(|m| m.len() as i64).unwrap_or(0);
-            stats.total_original += original_size;
 
             let mut cmd = Command::new(ff);
             cmd.arg("-y").arg("-i").arg(src_path)
@@ -499,12 +518,16 @@ fn convert_single_file(
 
             if code == 0 && std::path::Path::new(&out_str).exists() {
                 let new_size = std::fs::metadata(&out_str).map(|m| m.len() as i64).unwrap_or(0);
+                // 只在产出结果后才计入体积统计，失败文件不污染总节省
+                stats.total_original += original_size;
                 stats.total_converted += new_size;
                 stats.success_count += 1;
                 let saved = original_size - new_size;
                 let pct = if original_size > 0 { (saved * 100 / original_size) as i32 } else { 0 };
-                emit_progress(app_handle, src_path, "done", &format!("saved:{}kb", new_size / 1024), saved, pct);
-                if request.delete_source { let _ = std::fs::remove_file(src_path); }
+                emit_progress_with_output(app_handle, src_path, "done", &format!("saved:{}kb", new_size / 1024), saved, pct, Some(out_str.clone()));
+                if request.delete_source && !is_same_file(src_path, Path::new(&out_str)) {
+                    let _ = std::fs::remove_file(src_path);
+                }
             } else {
                 stats.fail_count += 1;
                 emit_progress(app_handle, src_path, "failed", "gif_convert_fail", 0, 0);
@@ -524,7 +547,6 @@ fn convert_single_file(
 
     let mut work_path = Path::new(src_path).to_path_buf();
     let original_size = std::fs::metadata(src_path).map(|m| m.len() as i64).unwrap_or(0);
-    stats.total_original += original_size;
 
     // ── Pre-compress JPEG ──
     if (ext == "jpg" || ext == "jpeg") && jpegoptim.is_some() {
@@ -585,7 +607,8 @@ fn convert_single_file(
 
     let file_size = std::fs::metadata(src_path).map(|m| m.len()).unwrap_or(0);
     if file_size > 100_000_000 {
-        stats.fail_count += 1;
+        // 过大被跳过：计入 skip，不计入体积统计，也不是失败
+        stats.skip_count += 1;
         emit_progress(app_handle, src_path, "skipped", &format!("too_large:{}MB", file_size / 1_000_000), 0, 0);
         let _ = app_handle.emit("convert-stats", stats.clone());
         return;
@@ -593,7 +616,7 @@ fn convert_single_file(
     let dims = ImageReader::open(&work_path).ok().and_then(|r| r.into_dimensions().ok());
     if let Some((w, h)) = dims {
         if w as u64 * h as u64 > 25_000_000 {
-            stats.fail_count += 1;
+            stats.skip_count += 1;
             emit_progress(app_handle, src_path, "skipped", &format!("too_large:{}x{}", w, h), 0, 0);
             let _ = app_handle.emit("convert-stats", stats.clone());
             return;
@@ -620,13 +643,15 @@ fn convert_single_file(
 
     // ── Encode ──
     let use_avif = request.output_format == "avif";
+    let mut target_met = true;
     let webp_mem: Vec<u8> = if use_avif {
         match encode_avif(&img, quality) {
             Ok(b) => b, Err(e) => { stats.fail_count += 1; emit_progress(app_handle, src_path, "failed", &e, 0, 0); let _ = app_handle.emit("convert-stats", stats.clone()); return; }
         }
     } else if let Some(target_kb) = request.target_size_kb {
         match encode_target_size(&img, target_kb, request.lossless) {
-            Ok(b) => b, Err(e) => { stats.fail_count += 1; emit_progress(app_handle, src_path, "failed", &e, 0, 0); let _ = app_handle.emit("convert-stats", stats.clone()); return; }
+            Ok((b, met)) => { target_met = met; b }
+            Err(e) => { stats.fail_count += 1; emit_progress(app_handle, src_path, "failed", &e, 0, 0); let _ = app_handle.emit("convert-stats", stats.clone()); return; }
         }
     } else {
         match encode_webp(&img, quality, request.lossless) {
@@ -638,23 +663,34 @@ fn convert_single_file(
     let new_size = webp_mem.len() as i64;
     if new_size >= original_size && original_size > 0 && request.target_size_kb.is_none() {
         stats.skip_count += 1;
+        stats.total_original += original_size;
         stats.total_converted += original_size;
         emit_progress(app_handle, src_path, "skipped", "skipped", 0, 0);
     } else if let Err(e) = std::fs::write(&output_str, &webp_mem) {
         stats.fail_count += 1;
         emit_progress(app_handle, src_path, "failed", &format!("write_fail:{}", e), 0, 0);
     } else {
+        // P0 修复：输出与源是同一个文件（如“覆盖”模式 + webp 输入）时，
+        // 绝不能执行 delete_source —— 否则刚写好的输出会被当作“源文件”删掉，
+        // 原图与结果双双丢失。此处只跳过删除，不做其他行为改变。
+        let same_as_source = is_same_file(src_path, Path::new(&output_str));
+        stats.total_original += original_size;
         stats.total_converted += new_size;
         let saved_bytes = (original_size - new_size).max(0);
         let saved_pct = if original_size > 0 { (saved_bytes * 100 / original_size) as i32 } else { 0 };
         stats.success_count += 1;
-        emit_progress(app_handle, src_path, "done", &format!("saved:{}kb", new_size / 1024), saved_bytes, saved_pct);
+        let done_msg = if !target_met {
+            format!("target_unreachable:{}kb", new_size / 1024)
+        } else {
+            format!("saved:{}kb", new_size / 1024)
+        };
+        emit_progress_with_output(app_handle, src_path, "done", &done_msg, saved_bytes, saved_pct, Some(output_str.clone()));
 
         if request.output_format == "both" {
             let avif_path = format!("{}.avif", output_str.trim_end_matches(".webp"));
             if let Ok(avif_mem) = encode_avif(&img, quality) { let _ = std::fs::write(&avif_path, &avif_mem); }
         }
-        if request.delete_source {
+        if request.delete_source && !same_as_source {
             if let Err(e) = std::fs::remove_file(src_path) {
                 emit_progress(app_handle, src_path, "done", &format!("delete_fail:{}", e), saved_bytes, saved_pct);
             }
@@ -718,6 +754,20 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
 }
 
 // ─── Output path helpers ────────────────────────────────────────────
+
+/// 判断两个路径是否指向同一个文件。优先 canonicalize（可解析大小写、符号链接、
+/// `..` 段）；任一侧解析失败时退回规范化字符串比较（Windows 大小写不敏感）。
+fn is_same_file(a: &str, b: &Path) -> bool {
+    let bp = Path::new(a);
+    if let (Ok(ca), Ok(cb)) = (std::fs::canonicalize(bp), std::fs::canonicalize(b)) {
+        return ca == cb;
+    }
+    let norm = |s: &str| {
+        let s = s.replace('/', "\\");
+        if cfg!(target_os = "windows") { s.to_lowercase() } else { s }
+    };
+    norm(a) == norm(&b.to_string_lossy())
+}
 
 fn build_output_name(stem: &str, ext: &str, naming_mode: &str, quality: i32) -> String {
     match naming_mode {
@@ -875,12 +925,25 @@ fn run_cmd_timeout(cmd: &mut Command, secs: u64, cancel_flag: &Arc<AtomicBool>) 
 }
 
 fn emit_progress(app: &AppHandle, file: &str, status: &str, message: &str, saved_bytes: i64, saved_pct: i32) {
+    emit_progress_with_output(app, file, status, message, saved_bytes, saved_pct, None);
+}
+
+fn emit_progress_with_output(
+    app: &AppHandle,
+    file: &str,
+    status: &str,
+    message: &str,
+    saved_bytes: i64,
+    saved_pct: i32,
+    output_path: Option<String>,
+) {
     let progress = FileProgress {
         file: file.to_string(),
         status: status.to_string(),
         message: message.to_string(),
         saved_bytes,
         saved_pct,
+        output_path,
     };
     let _ = app.emit("convert-progress", &progress);
 }

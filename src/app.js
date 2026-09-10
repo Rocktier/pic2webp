@@ -134,20 +134,46 @@ function updateToolStatus() {
 
 // ─── Add files ───────────────────────────────────────────────────────
 
+const SUPPORTED_EXTS = ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp", "tiff"];
+
+function fileExt(p) {
+  const name = p.split(/[/\\]/).pop() || "";
+  const i = name.lastIndexOf(".");
+  return i === -1 ? "" : name.slice(i + 1).toLowerCase();
+}
+
 function addFiles(paths) {
+  const skippedExt = [];
   for (const p of paths) {
     if (!p || typeof p !== "string") continue;
+    if (!SUPPORTED_EXTS.includes(fileExt(p))) {
+      skippedExt.push(p);
+      continue;
+    }
     if (!files.some((f) => f.path === p)) {
-      files.push({ path: p, status: "pending", message: "", savedBytes: 0, savedPct: 0, size: 0 });
+      files.push({ path: p, status: "pending", message: "", savedBytes: 0, savedPct: 0, size: 0, outputPath: null });
     }
   }
   renderFiles();
   checkFileWarnings();
   updateConvertBtn();
+  if (skippedExt.length > 0) showUnsupportedHint(skippedExt.length);
   // Best-effort fetch file sizes for large-file detection
   fetchFileSizes();
   checkFolderHint(paths);
   dropzone.classList.remove("empty");
+}
+
+// 在文件列表顶部显示一条临时提示：拖入了不支持的文件
+function showUnsupportedHint(n) {
+  const existing = document.getElementById("batch-warning");
+  if (existing) existing.remove();
+  const warn = document.createElement("div");
+  warn.id = "batch-warning";
+  warn.className = "hint warn";
+  warn.textContent = t("unsupported-dropped", { n });
+  const header = document.querySelector(".file-list-header");
+  if (header) header.insertAdjacentElement("afterend", warn);
 }
 
 async function checkFolderHint(paths) {
@@ -385,14 +411,15 @@ async function showCompare(filePath) {
     origSrc = await invoke("generate_thumbnail", { path: filePath, size: 600 });
   } catch (_) {}
 
-  // Find converted file
-  const name = filePath.split(/[/\\]/).pop();
-  const stem = name.replace(/\.[^.]+$/, "");
-  const parent = filePath.replace(/[/\\][^/\\]+$/, "");
-  const webpPath = `${parent}/${stem}-webp.webp`;
-  try {
-    convSrc = await invoke("generate_thumbnail", { path: webpPath, size: 600 });
-  } catch (_) {}
+  // Find converted file: 优先使用后端转换时回报的真实输出路径
+  //（否则在输出目录/-q80/时间戳命名/AVIF 等情况下永远找不到文件）
+  const record = files.find((f) => f.path === filePath);
+  const webpPath = record?.outputPath || null;
+  if (webpPath) {
+    try {
+      convSrc = await invoke("generate_thumbnail", { path: webpPath, size: 600 });
+    } catch (_) {}
+  }
 
   function renderSideBySide() {
     content.innerHTML = "";
@@ -496,13 +523,14 @@ function statusLabel(s) {
 
 // ─── Update UI for file progress ────────────────────────────────────
 
-function updateFileProgress(filePath, status, message, savedBytes, savedPct) {
+function updateFileProgress(filePath, status, message, savedBytes, savedPct, outputPath) {
   const f = files.find((x) => x.path === filePath);
   if (!f) return;
   f.status = status;
   f.message = message;
   f.savedBytes = savedBytes;
   f.savedPct = savedPct;
+  if (outputPath) f.outputPath = outputPath;
 
   // 不用 CSS.escape（它用于 CSS 标识符，不适合属性值），
   // 改为遍历查找，兼容 Windows 路径中的反斜杠
@@ -801,7 +829,8 @@ if (retryAllBtn) {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   const tag = e.target.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  // 排除表单元素与按钮：按钮自带 Enter 激活，全局再触发一次会双重开始转换
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
   if (convertBtn && !convertBtn.disabled) startConvert();
 });
 
@@ -844,7 +873,7 @@ async function setupListeners() {
 
   await listen("convert-progress", (event) => {
     const p = event.payload;
-    updateFileProgress(p.file, p.status, p.message, p.saved_bytes, p.saved_pct);
+    updateFileProgress(p.file, p.status, p.message, p.saved_bytes, p.saved_pct, p.output_path);
   });
 
   await listen("convert-stats", (event) => {
@@ -986,6 +1015,9 @@ if (langToggle) {
 async function init() {
   initLang();
   updateLangToggle();
+
+  // First render so the empty-state guide toggle gets its click listener bound
+  renderFiles();
 
   // Re-render on language change (for dynamic content not covered by applyLang)
   window.addEventListener("lang-changed", () => {
