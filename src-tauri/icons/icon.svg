@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- macOS icon grid: artwork scaled to ~78% (960 → 800), leaving proper padding -->
+  <g transform="translate(85.3,85.3) scale(0.8333)">
   <!-- Dark rounded-square background -->
   <rect x="32" y="32" width="960" height="960" rx="200" ry="200" fill="#0A0A0A"/>
   <rect x="32" y="32" width="960" height="960" rx="200" ry="200" fill="none" stroke="#333333" stroke-width="6"/>
@@ -15,4 +17,5 @@
 
   <!-- Product code: replace WP with SQ / WP / PE / MD -->
   <text x="512" y="640" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="360" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central" letter-spacing="-20">WP</text>
+  </g>
 </svg>
