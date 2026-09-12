@@ -940,12 +940,15 @@ if (themeToggle) {
   function applySystemTheme() {
     applyTheme(darkModeMedia.matches);
     themeToggle.textContent = "🌓";
+    themeToggle.title = "Following system";
   }
   
   if (savedTheme === "dark") {
     applyTheme(true);
+    themeToggle.title = "Dark mode";
   } else if (savedTheme === "light") {
     applyTheme(false);
+    themeToggle.title = "Light mode";
   } else {
     // No saved preference, follow system
     applySystemTheme();
@@ -964,15 +967,18 @@ if (themeToggle) {
       // dark → light
       applyTheme(false);
       themeToggle.textContent = "🌙";
+      themeToggle.title = "Light mode";
       localStorage.setItem("pic2webp-theme", "light");
     } else if (saved === "light") {
       // light → auto (system follow)
       localStorage.removeItem("pic2webp-theme");
       applySystemTheme();
+      themeToggle.title = "Following system";
     } else {
       // auto → dark
       applyTheme(true);
       themeToggle.textContent = "☀️";
+      themeToggle.title = "Dark mode";
       localStorage.setItem("pic2webp-theme", "dark");
     }
   });
