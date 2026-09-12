@@ -309,12 +309,13 @@ input[type="range"].quality-slider {
 .mini-toggle input { accent-color: var(--accent); width: 12px; height: 12px; }
 
 /* Pill 按钮组 */
-.pill-group { display: flex; gap: 4px; }
+.pill-group { display: flex; gap: 4px; flex-wrap: wrap; }
 .pill-btn {
-  flex: 1; padding: 4px 0; min-height: 26px;
+  flex: 1 1 auto; padding: 4px 8px; min-height: 26px;
   border: 1px solid var(--border); border-radius: var(--radius-md);
   background: var(--bg-card); color: var(--text-secondary);
   font-size: 11px; font-weight: 500; cursor: pointer; text-align: center;
+  white-space: nowrap;
   display: inline-flex; align-items: center; justify-content: center;
 }
 .pill-btn:hover { background: var(--bg-card-hover); border-color: var(--border-hover); color: var(--text-primary); }
