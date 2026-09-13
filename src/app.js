@@ -11,7 +11,6 @@ let selectedDir = null;
 let isConverting = false;
 let stats = null;
 let namingMode = "webp-suffix";
-let guideCollapsed = localStorage.getItem("pic2webp-guide-collapsed") !== "false";
 const BATCH_WARN_COUNT = 200;
 const LARGE_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
@@ -23,7 +22,7 @@ const dropzone = $("#dropzone");
 const fileList = $("#file-list");
 const fileCountText = $("#file-count-text");
 const clearBtn = $("#clear-btn");
-const qualitySlider = $("#quality-slider");
+let qualityValue = 80;
 const qualityVal = $("#quality-val");
 const chkRecursive = $("#chk-recursive");
 const chkDelete = $("#chk-delete");
@@ -45,15 +44,10 @@ const themeToggle = $("#theme-toggle");
 const chkLossless = $("#chk-lossless");
 const chkTargetSize = $("#chk-target-size");
 const targetSizeInput = $("#target-size-input");
-const advancedToggle = $("#advanced-toggle");
-const advancedSection = $("#advanced-section");
 const chkResize = $("#chk-resize");
 const resizeW = $("#resize-w");
 const resizeH = $("#resize-h");
 const resizeMode = $("#resize-mode");
-const outputFormat = $("#output-format");
-const chkWatermark = $("#chk-watermark");
-const watermarkText = $("#watermark-text");
 const chkStructure = $("#chk-structure");
 const chkExif = $("#chk-exif");
 const compareModal = $("#compare-modal");
@@ -62,7 +56,7 @@ const compareModal = $("#compare-modal");
 function buildRequest(fileList, { recursive, baseDir } = {}) {
   return {
     files: fileList,
-    quality: Math.max(10, Math.min(100, parseInt(qualitySlider.value) || 80)),
+    quality: qualityValue,
     recursive: recursive ?? chkRecursive.checked,
     delete_source: chkDelete.checked,
     naming_mode: namingMode,
@@ -71,13 +65,10 @@ function buildRequest(fileList, { recursive, baseDir } = {}) {
     strip_exif: chkExif?.checked ?? false,
     preserve_structure: chkStructure?.checked ?? false,
     target_size_kb: chkTargetSize?.checked && targetSizeInput ? parseInt(targetSizeInput.value) || null : null,
-    output_format: outputFormat?.value ?? "webp",
     resize_enabled: chkResize?.checked ?? false,
     resize_width: resizeW ? parseInt(resizeW.value) || null : null,
     resize_height: resizeH ? parseInt(resizeH.value) || null : null,
     resize_mode: resizeMode?.value ?? "fit",
-    watermark_text: chkWatermark?.checked && watermarkText ? watermarkText.value : null,
-    watermark_opacity: 0.5,
     base_dir: baseDir ?? null,
   };
 }
@@ -91,47 +82,6 @@ function formatBytes(bytes, decimals = 1) {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(decimals)} GB`;
 }
 
-// ─── Tool check ─────────────────────────────────────────────────────
-
-let toolCheck = null;
-
-async function checkTools() {
-  if (!isTauri()) {
-    updateConvertBtn();
-    return;
-  }
-  try {
-    toolCheck = await invoke("check_tools");
-    updateToolStatus();
-  } catch (e) {
-    console.warn("Tool check failed:", e);
-  }
-  updateConvertBtn();
-}
-
-function updateToolStatus() {
-  const el = document.getElementById("tool-status");
-  if (!el || !toolCheck) return;
-
-  const tools = [
-    { name: "jpegoptim", available: toolCheck.jpegoptim },
-    { name: "pngquant", available: toolCheck.pngquant },
-    { name: "oxipng", available: toolCheck.oxipng },
-    { name: "ffmpeg", available: toolCheck.ffmpeg },
-  ];
-
-  const anyAvailable = tools.some((tt) => tt.available);
-  if (!anyAvailable) {
-    el.textContent = t("no-precompress");
-    el.hidden = false;
-    return;
-  }
-
-  el.textContent = tools
-    .map((tt) => `${tt.available ? "✓" : "✗"} ${tt.name}`)
-    .join(" · ");
-  el.hidden = false;
-}
 
 // ─── Add files ───────────────────────────────────────────────────────
 
@@ -273,53 +223,13 @@ function renderFiles() {
 
   if (files.length === 0) {
     fileList.innerHTML = `
-      <div class="empty-state${guideCollapsed ? ' collapsed' : ''}" id="empty-state">
-        <div class="empty-state-toggle">
-          <span class="chevron">▾</span>
-          <span data-i18n="guide-toggle">${t("guide-toggle")}</span>
-        </div>
-        <div class="empty-state-body">
-          <div class="info-section">
-            <p data-i18n="why-webp">${t("why-webp")}</p>
-            <ul>
-              <li data-i18n="why-1">${t("why-1")}</li>
-              <li data-i18n="why-2">${t("why-2")}</li>
-              <li data-i18n="why-3">${t("why-3")}</li>
-              <li data-i18n="why-4">${t("why-4")}</li>
-            </ul>
-          </div>
-          <div class="info-section">
-            <p data-i18n="how-title">${t("how-title")}</p>
-            <ul>
-              <li data-i18n="how-1">${t("how-1")}</li>
-              <li data-i18n="how-2">${t("how-2")}</li>
-              <li data-i18n="how-3">${t("how-3")}</li>
-              <li data-i18n="how-4">${t("how-4")}</li>
-            </ul>
-          </div>
-          <div class="info-section">
-            <p data-i18n="tips-title">${t("tips-title")}</p>
-            <ul>
-              <li data-i18n="tips-1">${t("tips-1")}</li>
-              <li data-i18n="tips-2">${t("tips-2")}</li>
-              <li data-i18n="tips-3">${t("tips-3")}</li>
-            </ul>
-          </div>
-        </div>
+      <div class="empty-state" id="empty-state">
+        <p class="empty-hint" data-i18n="empty-hint">${t("empty-hint")}</p>
       </div>`;
     fileCountText.textContent = t("file-count", { n: files.length });
     clearBtn.hidden = true;
     dropzone.classList.add("empty");
     
-    // Add collapse toggle listener
-    const toggle = fileList.querySelector(".empty-state-toggle");
-    if (toggle) {
-      toggle.addEventListener("click", () => {
-        const es = document.getElementById("empty-state");
-        es.classList.toggle("collapsed");
-        localStorage.setItem("pic2webp-guide-collapsed", es.classList.contains("collapsed"));
-      });
-    }
     return;
   }
 
@@ -764,16 +674,20 @@ clearBtn.addEventListener("click", () => {
   updateConvertBtn();
 });
 
-// Quality slider — update value + q-suffix pill label
+// Quality presets — update value + q-suffix pill label (no slider)
 function setQuality(v) {
-  const val = Math.max(10, Math.min(100, parseInt(v) || 80));
-  qualitySlider.value = val;
-  qualityVal.textContent = val;
+  qualityValue = Math.max(10, Math.min(100, parseInt(v) || 80));
+  qualityVal.textContent = qualityValue;
   const qPill = namingPills.querySelector('[data-value="q-suffix"]');
-  if (qPill) qPill.textContent = `-q${val}`;
+  if (qPill) qPill.textContent = `-q${qualityValue}`;
+  document.querySelectorAll("#quality-pills .pill-btn").forEach((b) => {
+    b.classList.toggle("active", parseInt(b.dataset.q) === qualityValue);
+  });
 }
 
-qualitySlider.addEventListener("input", () => setQuality(qualitySlider.value));
+document.querySelectorAll("#quality-pills .pill-btn").forEach((b) => {
+  b.addEventListener("click", () => setQuality(b.dataset.q));
+});
 
 chkRecursive.addEventListener("change", () => {
   if (chkRecursive.checked) {
@@ -929,18 +843,19 @@ if (themeToggle) {
   const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
   
   function applyTheme(useDark) {
+    const mode = useDark ? "mode-dark" : "mode-light";
     if (useDark) {
       document.documentElement.setAttribute("data-theme", "dark");
-      themeToggle.textContent = "☀️";
     } else {
       document.documentElement.removeAttribute("data-theme");
-      themeToggle.textContent = "🌙";
     }
+    themeToggle.className = `theme-toggle ${mode}`;
+    themeToggle.title = useDark ? "Dark mode" : "Light mode";
   }
-  
+
   function applySystemTheme() {
     applyTheme(darkModeMedia.matches);
-    themeToggle.textContent = "🌓";
+    themeToggle.className = "theme-toggle mode-auto";
     themeToggle.title = "Following system";
   }
   
@@ -963,33 +878,20 @@ if (themeToggle) {
   
   themeToggle.addEventListener("click", () => {
     const saved = localStorage.getItem("pic2webp-theme");
-    
+
     if (saved === "dark") {
       // dark → light
       applyTheme(false);
-      themeToggle.textContent = "🌙";
-      themeToggle.title = "Light mode";
       localStorage.setItem("pic2webp-theme", "light");
     } else if (saved === "light") {
       // light → auto (system follow)
       localStorage.removeItem("pic2webp-theme");
       applySystemTheme();
-      themeToggle.title = "Following system";
     } else {
       // auto → dark
       applyTheme(true);
-      themeToggle.textContent = "☀️";
-      themeToggle.title = "Dark mode";
       localStorage.setItem("pic2webp-theme", "dark");
     }
-  });
-}
-
-// ── Advanced section toggle ──
-if (advancedToggle) {
-  advancedToggle.addEventListener("click", () => {
-    advancedToggle.classList.toggle("open");
-    advancedSection.classList.toggle("open");
   });
 }
 
@@ -1012,7 +914,6 @@ const menuActions = {
   open: () => dropzone.click(),
   clear: () => clearBtn.click(),
   theme: () => themeToggle.click(),
-  donate: () => document.getElementById("donate-btn")?.click(),
   website: () => openUrl("https://rocktier.com/pic2webp.html").catch(() => {}),
 };
 
@@ -1047,7 +948,7 @@ async function init() {
     updateConvertBtn();
   });
 
-  await checkTools();
+  updateConvertBtn();
 
   if (!isTauri()) return;
 

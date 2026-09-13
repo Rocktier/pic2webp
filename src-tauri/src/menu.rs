@@ -24,13 +24,6 @@ pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
-    let donate_i = MenuItem::with_id(
-        app,
-        "donate",
-        l("请作者喝杯奶茶", "Buy the Author a Tea"),
-        true,
-        None::<&str>,
-    )?;
     let site_i = MenuItem::with_id(app, "website", l("官方网站", "Website"), true, None::<&str>)?;
 
     let app_menu = Submenu::with_items(
@@ -91,7 +84,7 @@ pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         app,
         l("帮助", "Help"),
         true,
-        &[&site_i, &donate_i],
+        &[&site_i],
     )?;
 
     let menu = Menu::with_items(

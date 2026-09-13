@@ -30,8 +30,6 @@ pub struct ConvertRequest {
     pub preserve_structure: bool,
     #[serde(default)]
     pub target_size_kb: Option<u32>,
-    #[serde(default = "default_output_format")]
-    pub output_format: String, // "webp" | "both" ("avif" is accepted but not exposed in GUI)
     #[serde(default)]
     pub resize_enabled: bool,
     #[serde(default)]
@@ -40,18 +38,12 @@ pub struct ConvertRequest {
     pub resize_height: Option<u32>,
     #[serde(default = "default_resize_mode")]
     pub resize_mode: String, // "fit" | "fill" | "shrink"
-    #[serde(default)]
-    pub watermark_text: Option<String>,
-    #[serde(default = "default_watermark_opacity")]
-    pub watermark_opacity: f32,
     // Base dir for preserve_structure (the root input dir)
     #[serde(default)]
     pub base_dir: Option<String>,
 }
 
-fn default_output_format() -> String { "webp".into() }
 fn default_resize_mode() -> String { "fit".into() }
-fn default_watermark_opacity() -> f32 { 0.5 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileProgress {
@@ -76,14 +68,6 @@ pub struct ConvertResult {
     pub saved_pct: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCheck {
-    pub jpegoptim: bool,
-    pub pngquant: bool,
-    pub oxipng: bool,
-    pub ffmpeg: bool,
-}
-
 // ─── App state ──────────────────────────────────────────────────────
 
 pub struct AppState {
@@ -104,7 +88,7 @@ fn tool_exe_name(name: &str) -> String {
 }
 
 fn resolve_tools(app: &AppHandle) -> HashMap<String, Option<String>> {
-    let tool_names = ["jpegoptim", "pngquant", "oxipng", "ffmpeg"];
+    let tool_names = ["ffmpeg"];
     let mut map = HashMap::new();
     let mut search_dirs: Vec<PathBuf> = Vec::new();
 
@@ -158,16 +142,6 @@ fn resolve_tools(app: &AppHandle) -> HashMap<String, Option<String>> {
 }
 
 // ─── Commands ───────────────────────────────────────────────────────
-
-#[tauri::command]
-fn check_tools(state: State<AppState>) -> ToolCheck {
-    ToolCheck {
-        jpegoptim: state.tool_paths.get("jpegoptim").and_then(|o| o.as_ref()).is_some(),
-        pngquant: state.tool_paths.get("pngquant").and_then(|o| o.as_ref()).is_some(),
-        oxipng: state.tool_paths.get("oxipng").and_then(|o| o.as_ref()).is_some(),
-        ffmpeg: state.tool_paths.get("ffmpeg").and_then(|o| o.as_ref()).is_some(),
-    }
-}
 
 #[tauri::command]
 fn cancel_convert(state: State<AppState>) -> Result<(), String> {
@@ -276,117 +250,6 @@ fn apply_resize(img: image::DynamicImage, req: &ConvertRequest) -> image::Dynami
     }
 }
 
-/// Apply text watermark to an image
-fn apply_watermark(img: &mut image::DynamicImage, text: &str, opacity: f32) {
-    // Try to load a system font
-    let font_data = get_system_font();
-    let font_data = match font_data {
-        Some(d) => d,
-        None => return, // No font available, skip watermark
-    };
-    let font = match ab_glyph::FontRef::try_from_slice(&font_data) {
-        Ok(f) => f,
-        Err(_) => return,
-    };
-
-    let (w, h) = (img.width(), img.height());
-    let font_size = (w.min(h) as f32 * 0.04).clamp(16.0, 64.0);
-    
-    use ab_glyph::{Font, ScaleFont};
-    let scaled = font.as_scaled(font_size);
-    
-    // Calculate text width
-    let mut text_w = 0.0;
-    let mut last_id = None;
-    for c in text.chars() {
-        let glyph_id = font.glyph_id(c);
-        if let Some(last) = last_id {
-            text_w += scaled.kern(last, glyph_id);
-        }
-        let _glyph = glyph_id.with_scale(font_size);
-        text_w += scaled.h_advance(glyph_id);
-        last_id = Some(glyph_id);
-    }
-    
-    // Position: bottom-right with padding
-    let padding = (w.min(h) as f32 * 0.02).max(8.0);
-    let x_start = (w as f32 - text_w - padding).max(padding);
-    let y_start = h as f32 - padding;
-
-    let rgba = img.to_rgba8();
-    let mut raw: Vec<u8> = rgba.into_raw();
-
-    
-    // Render each glyph
-    let mut x = x_start;
-    let mut last_id = None;
-    for c in text.chars() {
-        let glyph_id = font.glyph_id(c);
-        if let Some(last) = last_id {
-            x += scaled.kern(last, glyph_id);
-        }
-        let glyph = glyph_id.with_scale_and_position(font_size, ab_glyph::Point { x, y: y_start });
-        if let Some(outlined) = scaled.outline_glyph(glyph) {
-            let bounds = outlined.px_bounds();
-            outlined.draw(|px_x, px_y, v| {
-                let gx = bounds.min.x as i32 + px_x as i32;
-                let gy = bounds.min.y as i32 + px_y as i32;
-                if gx >= 0 && gy >= 0 && (gx as u32) < w && (gy as u32) < h {
-                    let idx = (gy as usize * w as usize + gx as usize) * 4;
-                    // 标准 over 合成：以白色为水印源，按覆盖率和透明度混入。
-                    // 不再把 alpha 强制写 255（旧行为会在透明 PNG 上留白色毛边）。
-                    let src_a = (v * opacity).clamp(0.0, 1.0);
-                    if src_a <= 0.0 { return; }
-                    let dst_a = raw[idx + 3] as f32 / 255.0;
-                    let out_a = src_a + dst_a * (1.0 - src_a);
-                    if out_a <= 0.0 { return; }
-                    for c in 0..3 {
-                        let dst_c = raw[idx + c] as f32 / 255.0;
-                        let out_c = (1.0 * src_a + dst_c * dst_a * (1.0 - src_a)) / out_a;
-                        raw[idx + c] = (out_c * 255.0).round().clamp(0.0, 255.0) as u8;
-                    }
-                    raw[idx + 3] = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-                }
-            });
-        }
-        x += scaled.h_advance(glyph_id);
-        last_id = Some(glyph_id);
-    }
-    let new_rgba = image::ImageBuffer::from_raw(w, h, raw).unwrap();
-    *img = image::DynamicImage::ImageRgba8(new_rgba);
-}
-
-fn get_system_font() -> Option<Vec<u8>> {
-    let candidates: Vec<&str> = if cfg!(target_os = "macos") {
-        vec![
-            "/System/Library/Fonts/Helvetica.ttc",
-            "/System/Library/Fonts/SFNS.ttf",
-            "/System/Library/Fonts/PingFang.ttc",
-            "/System/Library/Fonts/ヒラギノ角ゴシック.ttc",
-            "/Library/Fonts/Arial.ttf",
-        ]
-    } else if cfg!(target_os = "windows") {
-        vec![
-            "C:\\Windows\\Fonts\\msyh.ttc",
-            "C:\\Windows\\Fonts\\msyhbd.ttc",
-            "C:\\Windows\\Fonts\\arial.ttf",
-            "C:\\Windows\\Fonts\\segoeui.ttf",
-        ]
-    } else {
-        vec![
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-        ]
-    };
-    for path in candidates {
-        if let Ok(data) = std::fs::read(path) {
-            return Some(data);
-        }
-    }
-    None
-}
-
 /// Encode image to WebP with given quality (or lossless)
 fn encode_webp(img: &image::DynamicImage, quality: i32, lossless: bool) -> Result<Vec<u8>, String> {
     let (w, h) = (img.width(), img.height());
@@ -436,15 +299,6 @@ fn encode_target_size(img: &image::DynamicImage, target_kb: u32, lossless: bool)
     }
 }
 
-/// Encode to AVIF using image crate
-fn encode_avif(img: &image::DynamicImage, _quality: i32) -> Result<Vec<u8>, String> {
-    let mut buf = Cursor::new(Vec::new());
-    // image crate's AVIF encoder uses ravif
-    img.write_to(&mut buf, image::ImageFormat::Avif)
-        .map_err(|e| format!("avif_fail:{}", e))?;
-    Ok(buf.into_inner())
-}
-
 // ─── File collection helper ──────────────────────────────────────────
 
 fn collect_convert_files(request: &ConvertRequest) -> Vec<String> {
@@ -479,16 +333,11 @@ fn collect_convert_files(request: &ConvertRequest) -> Vec<String> {
 
 #[allow(clippy::too_many_arguments)]
 fn convert_single_file(
-    idx: usize,
     src_path: &str,
     request: &ConvertRequest,
     stats: &mut ConvertResult,
     app_handle: &AppHandle,
     cancel_flag: &Arc<AtomicBool>,
-    scratch_root: &Path,
-    jpegoptim: &Option<String>,
-    pngquant: &Option<String>,
-    oxipng: &Option<String>,
     ffmpeg: &Option<String>,
     quality: i32,
 ) {
@@ -540,69 +389,15 @@ fn convert_single_file(
     }
 
     // ── Build output filename & path ──
-    let out_ext = match request.output_format.as_str() { "avif" => "avif", _ => "webp" };
+    let out_ext = "webp";
     let filename = build_output_name(stem, out_ext, &request.naming_mode, quality);
     let output_path = build_output_path(&filename, request, parent, src_path);
     let output_str = output_path.to_string_lossy().to_string();
 
-    let mut work_path = Path::new(src_path).to_path_buf();
+    let work_path = Path::new(src_path).to_path_buf();
     let original_size = std::fs::metadata(src_path).map(|m| m.len() as i64).unwrap_or(0);
 
-    // ── Pre-compress JPEG ──
-    if (ext == "jpg" || ext == "jpeg") && jpegoptim.is_some() {
-        emit_progress(app_handle, src_path, "compressing", "precompress_jpeg", 0, 0);
-        let work_dir = scratch_root.join(idx.to_string());
-        let _ = std::fs::create_dir_all(&work_dir);
-        let mut cmd = Command::new(jpegoptim.as_ref().unwrap());
-        cmd.arg("--strip-all").arg("--all-normal").arg("--dest").arg(&work_dir).arg(src_path);
-        let (code, _) = run_cmd_timeout(&mut cmd, 60, cancel_flag);
-        if cancel_flag.load(Ordering::Relaxed) { return; }
-        if code == 0 {
-            if let Some(name) = Path::new(src_path).file_name() {
-                let out = work_dir.join(name);
-                if out.exists() { work_path = out; }
-            }
-        }
-    }
-
-    // ── Pre-compress PNG ──
-    if ext == "png" {
-        emit_progress(app_handle, src_path, "compressing", "precompress_png", 0, 0);
-        let work_dir = scratch_root.join(idx.to_string());
-        let _ = std::fs::create_dir_all(&work_dir);
-
-        if let (Some(qtool), Some(oxi)) = (pngquant, oxipng) {
-            let qpath = work_dir.join("a.png");
-            let mut png_cmd = Command::new(qtool);
-            png_cmd.arg("--quality").arg(format!("{}-100", quality.min(85)))
-                .arg("--force").arg("--output").arg(&qpath).arg(src_path);
-            let (code, _) = run_cmd_timeout(&mut png_cmd, 90, cancel_flag);
-            if cancel_flag.load(Ordering::Relaxed) { return; }
-            if code == 0 && qpath.exists() {
-                let mut oxi_cmd = Command::new(oxi);
-                oxi_cmd.arg("--strip").arg("safe").arg("--opt").arg("3").arg(&qpath);
-                run_cmd_timeout(&mut oxi_cmd, 120, cancel_flag);
-                if cancel_flag.load(Ordering::Relaxed) { return; }
-                if qpath.exists() { work_path = qpath; }
-            } else {
-                let opath = work_dir.join("b.png");
-                let mut oxi_cmd = Command::new(oxi);
-                oxi_cmd.arg("--strip").arg("safe").arg("--opt").arg("1").arg("--out").arg(&opath).arg(src_path);
-                run_cmd_timeout(&mut oxi_cmd, 120, cancel_flag);
-                if cancel_flag.load(Ordering::Relaxed) { return; }
-                if opath.exists() { work_path = opath; }
-            }
-        } else if let Some(oxi) = oxipng {
-            let opath = work_dir.join("b.png");
-            let mut oxi_cmd = Command::new(oxi);
-            oxi_cmd.arg("--strip").arg("safe").arg("--opt").arg("1").arg("--out").arg(&opath).arg(src_path);
-            run_cmd_timeout(&mut oxi_cmd, 120, cancel_flag);
-            if cancel_flag.load(Ordering::Relaxed) { return; }
-            if opath.exists() { work_path = opath; }
-        }
-    }
-
-    // ── Decode ──
+    // ── Decode ──    // ── Decode ──
     emit_progress(app_handle, src_path, "converting", "converting", 0, 0);
 
     let file_size = std::fs::metadata(src_path).map(|m| m.len()).unwrap_or(0);
@@ -637,18 +432,10 @@ fn convert_single_file(
     };
 
     img = apply_resize(img, request);
-    if let Some(ref wm_text) = request.watermark_text {
-        if !wm_text.is_empty() { apply_watermark(&mut img, wm_text, request.watermark_opacity); }
-    }
 
     // ── Encode ──
-    let use_avif = request.output_format == "avif";
     let mut target_met = true;
-    let webp_mem: Vec<u8> = if use_avif {
-        match encode_avif(&img, quality) {
-            Ok(b) => b, Err(e) => { stats.fail_count += 1; emit_progress(app_handle, src_path, "failed", &e, 0, 0); let _ = app_handle.emit("convert-stats", stats.clone()); return; }
-        }
-    } else if let Some(target_kb) = request.target_size_kb {
+    let webp_mem: Vec<u8> = if let Some(target_kb) = request.target_size_kb {
         match encode_target_size(&img, target_kb, request.lossless) {
             Ok((b, met)) => { target_met = met; b }
             Err(e) => { stats.fail_count += 1; emit_progress(app_handle, src_path, "failed", &e, 0, 0); let _ = app_handle.emit("convert-stats", stats.clone()); return; }
@@ -686,10 +473,6 @@ fn convert_single_file(
         };
         emit_progress_with_output(app_handle, src_path, "done", &done_msg, saved_bytes, saved_pct, Some(output_str.clone()));
 
-        if request.output_format == "both" {
-            let avif_path = format!("{}.avif", output_str.trim_end_matches(".webp"));
-            if let Ok(avif_mem) = encode_avif(&img, quality) { let _ = std::fs::write(&avif_path, &avif_mem); }
-        }
         if request.delete_source && !same_as_source {
             if let Err(e) = std::fs::remove_file(src_path) {
                 emit_progress(app_handle, src_path, "done", &format!("delete_fail:{}", e), saved_bytes, saved_pct);
@@ -707,9 +490,6 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
     if *converting { return Err("ERR_ALREADY_CONVERTING".into()); }
     *converting = true;
 
-    let jpegoptim = state.tool_paths.get("jpegoptim").and_then(|o| o.clone());
-    let pngquant = state.tool_paths.get("pngquant").and_then(|o| o.clone());
-    let oxipng = state.tool_paths.get("oxipng").and_then(|o| o.clone());
     let ffmpeg = state.tool_paths.get("ffmpeg").and_then(|o| o.clone());
     let quality = request.quality.clamp(10, 100);
 
@@ -735,10 +515,10 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
         ));
         let _ = std::fs::create_dir_all(&scratch_root);
 
-        for (idx, src_path) in all_files.iter().enumerate() {
+        for src_path in all_files.iter() {
             if cancel_flag.load(Ordering::Relaxed) { break; }
-            convert_single_file(idx, src_path, &request, &mut stats, &app_handle,
-                &cancel_flag, &scratch_root, &jpegoptim, &pngquant, &oxipng, &ffmpeg, quality);
+            convert_single_file(src_path, &request, &mut stats, &app_handle,
+                &cancel_flag, &ffmpeg, quality);
         }
 
         let _ = std::fs::remove_dir_all(&scratch_root);
@@ -1127,7 +907,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            check_tools, start_convert, cancel_convert, force_close, get_file_size,
+            start_convert, cancel_convert, force_close, get_file_size,
             is_dir, generate_thumbnail, build_menu
         ])
         .run(tauri::generate_context!())
