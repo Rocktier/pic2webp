@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { initLang, getLang, setLang, t, translateBackendMessage, getLanguages } from "./i18n.js";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 // ─── State ──────────────────────────────────────────────────────────
 
@@ -1006,10 +1007,25 @@ if (compareModal) {
   });
 }
 
+// ─── Family-standard menu ───────────────────────────────────────────
+const menuActions = {
+  open: () => dropzone.click(),
+  clear: () => clearBtn.click(),
+  theme: () => themeToggle.click(),
+  donate: () => document.getElementById("donate-btn")?.click(),
+  website: () => openUrl("https://rocktier.com/pic2webp.html").catch(() => {}),
+};
+
+if (isTauri) {
+  listen("menu-action", (e) => menuActions[e.payload]?.()).catch(() => {});
+  invoke("build_menu", { lang: getLang() }).catch(() => {});
+}
+
 if (langToggle) {
   langToggle.addEventListener("change", () => {
     setLang(langToggle.value);
     updateLangToggle();
+    if (isTauri) invoke("build_menu", { lang: getLang() }).catch(() => {});
     // Re-render file list to update dynamic text
     renderFiles();
     updateConvertBtn();

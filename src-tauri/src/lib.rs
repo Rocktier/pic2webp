@@ -1092,11 +1092,16 @@ pub fn run_cli(args: &[String]) {
     eprintln!("\nDone: {} success, {} failed, total saved: {}KB", success, fail, total_saved / 1024);
 }
 
+pub mod menu;
+
 // ─── App builder ────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .on_menu_event(|app, event| {
+            let _ = app.emit("menu-action", event.id().0.clone());
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -1123,8 +1128,14 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             check_tools, start_convert, cancel_convert, force_close, get_file_size,
-            is_dir, generate_thumbnail
+            is_dir, generate_thumbnail, build_menu
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// 前端挂载后（及语言切换时）按 UI 语言重建菜单。
+#[tauri::command]
+fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
+    menu::build(&app, &lang).map_err(|e| e.to_string())
 }
