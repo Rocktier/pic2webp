@@ -49,7 +49,6 @@ const resizeW = $("#resize-w");
 const resizeH = $("#resize-h");
 const resizeMode = $("#resize-mode");
 const chkStructure = $("#chk-structure");
-const chkExif = $("#chk-exif");
 const compareModal = $("#compare-modal");
 
 // ─── Build convert request ─────────────────────────────────────────
@@ -62,7 +61,6 @@ function buildRequest(fileList, { recursive, baseDir } = {}) {
     naming_mode: namingMode,
     output_dir: selectedDir || null,
     lossless: chkLossless?.checked ?? false,
-    strip_exif: chkExif?.checked ?? false,
     preserve_structure: chkStructure?.checked ?? false,
     target_size_kb: chkTargetSize?.checked && targetSizeInput ? parseInt(targetSizeInput.value) || null : null,
     resize_enabled: chkResize?.checked ?? false,
@@ -93,11 +91,16 @@ function fileExt(p) {
   return i === -1 ? "" : name.slice(i + 1).toLowerCase();
 }
 
-function addFiles(paths) {
+async function addFiles(paths) {
   const skippedExt = [];
   for (const p of paths) {
     if (!p || typeof p !== "string") continue;
-    if (!SUPPORTED_EXTS.includes(fileExt(p))) {
+    // 目录不校验扩展名：递归 / 保留目录结构整条链路依赖目录项能进列表
+    let isFolder = false;
+    if (isTauri()) {
+      try { isFolder = await invoke("is_dir", { path: p }); } catch (_) {}
+    }
+    if (!isFolder && !SUPPORTED_EXTS.includes(fileExt(p))) {
       skippedExt.push(p);
       continue;
     }
@@ -465,13 +468,15 @@ function updateFileProgress(filePath, status, message, savedBytes, savedPct, out
   updateProgress();
 }
 
+let totalTasks = 0;
+
 function updateProgress() {
   const container = document.getElementById("progress-bar-container");
   const fill = document.getElementById("progress-bar-fill");
   const text = document.getElementById("progress-text");
   if (!container || !fill || !text) return;
   if (isConverting) {
-    const total = files.length;
+    const total = totalTasks > 0 ? totalTasks : files.length;
     const done = files.filter(f => f.status === 'done' || f.status === 'skipped' || f.status === 'failed').length;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     container.hidden = false;
@@ -485,13 +490,17 @@ function updateProgress() {
 
 // ─── Update stats ───────────────────────────────────────────────────
 
+// 重试只统计本次批次，界面统计要叠加，否则之前成功的文件会从面板上消失
+let retryBase = null;
+
 function updateStats(s) {
   stats = s;
   statsPanel.hidden = false;
-  statSuccess.textContent = s.success_count;
-  statSkip.textContent = s.skip_count;
-  statFail.textContent = s.fail_count;
-  statSaved.textContent = formatBytes(s.saved);
+  const b = retryBase || { success_count: 0, skip_count: 0, fail_count: 0, saved: 0 };
+  statSuccess.textContent = (b.success_count || 0) + (s.success_count || 0);
+  statSkip.textContent = (b.skip_count || 0) + (s.skip_count || 0);
+  statFail.textContent = (b.fail_count || 0) + (s.fail_count || 0);
+  statSaved.textContent = formatBytes((b.saved || 0) + (s.saved || 0));
 }
 
 // ─── Convert button state ───────────────────────────────────────────
@@ -526,6 +535,8 @@ function updateConvertBtn() {
 // ─── Start conversion ───────────────────────────────────────────────
 
 async function startConvert() {
+  retryBase = null;
+  totalTasks = files.length;
   if (isConverting) return;
 
   // P0-3: Confirm before deleting source files
@@ -571,6 +582,7 @@ async function startConvert() {
 // ─── Retry single failed file ──────────────────────────────────────
 
 async function retrySingleFile(path) {
+  retryBase = stats ? { ...stats } : null;
   if (isConverting) return;
   const f = files.find((x) => x.path === path);
   if (!f) return;
@@ -599,6 +611,7 @@ async function retrySingleFile(path) {
 // ─── Retry all failed files (P1-5) ─────────────────────────────────
 
 async function retryAllFailed() {
+  retryBase = stats ? { ...stats } : null;
   if (isConverting) return;
   const failedFiles = files.filter((f) => f.status === "failed");
   if (failedFiles.length === 0) return;
@@ -635,14 +648,14 @@ dropzone.addEventListener("dragleave", () => {
   dropzone.classList.remove("dragover");
 });
 
-dropzone.addEventListener("drop", (e) => {
+dropzone.addEventListener("drop", async (e) => {
   e.preventDefault();
   dropzone.classList.remove("dragover");
   if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
     const paths = Array.from(e.dataTransfer.files)
       .map((f) => f.path)
       .filter(Boolean);
-    if (paths.length > 0) addFiles(paths);
+    if (paths.length > 0) await addFiles(paths);
   }
 });
 
@@ -655,9 +668,9 @@ dropzone.addEventListener("click", async () => {
       ]
     });
     if (result && Array.isArray(result)) {
-      addFiles(result);
+      await addFiles(result);
     } else if (typeof result === "string") {
-      addFiles([result]);
+      await addFiles([result]);
     }
   } catch (e) {
     console.warn("Dialog not available:", e);
@@ -797,9 +810,10 @@ async function setupListeners() {
 
   await listen("convert-done", (event) => {
     isConverting = false;
-    // Restore unprocessed files to pending
-    for (const f of files) {
-      if (f.status === "pending") {
+  for (const f of files) {
+    // 取消时后端不再为被中断的文件补发状态，否则会永久卡在"转换中"
+    if (f.status === "converting" || f.status === "compressing") f.status = "pending";
+    if (f.status === "pending") {
         f.message = "";
         f.savedBytes = 0;
         f.savedPct = 0;
@@ -902,6 +916,19 @@ if (chkTargetSize) {
   });
 }
 
+// 选择文件夹（部分平台拖不进目录，给一个显式入口）
+const folderBtn = document.getElementById("folder-btn");
+if (folderBtn) {
+  folderBtn.addEventListener("click", async () => {
+    try {
+      const dir = await open({ directory: true, title: t("select-folder") });
+      if (dir) await addFiles([dir]);
+    } catch (e) {
+      console.warn("Folder dialog not available:", e);
+    }
+  });
+}
+
 // ── Compare modal ──
 if (compareModal) {
   compareModal.addEventListener("click", (e) => {
@@ -917,16 +944,16 @@ const menuActions = {
   website: () => openUrl("https://rocktier.com/pic2webp.html").catch(() => {}),
 };
 
-if (isTauri) {
+if (isTauri()) {
   listen("menu-action", (e) => menuActions[e.payload]?.()).catch(() => {});
-  invoke("build_menu", { lang: getLang() }).catch(() => {});
+  // 菜单必须在 initLang() 之后构建，否则保存的语言偏好不生效（见 init()）
 }
 
 if (langToggle) {
   langToggle.addEventListener("change", () => {
     setLang(langToggle.value);
     updateLangToggle();
-    if (isTauri) invoke("build_menu", { lang: getLang() }).catch(() => {});
+    if (isTauri()) invoke("build_menu", { lang: getLang() }).catch(() => {});
     // Re-render file list to update dynamic text
     renderFiles();
     updateConvertBtn();
@@ -938,6 +965,8 @@ if (langToggle) {
 async function init() {
   initLang();
   updateLangToggle();
+  // 语言已就绪：此刻构建菜单才能用上用户保存的语言
+  if (isTauri()) invoke("build_menu", { lang: getLang() }).catch(() => {});
 
   // First render so the empty-state guide toggle gets its click listener bound
   renderFiles();
@@ -954,10 +983,14 @@ async function init() {
 
   await setupListeners();
 
-  await listen("tauri://drag-drop", (event) => {
+  await listen("convert-total", (event) => {
+    totalTasks = Number(event.payload) || 0;
+  });
+
+  await listen("tauri://drag-drop", async (event) => {
     const raw = event.payload.paths || [];
     const paths = raw.map((p) => (typeof p === "string" ? p : p && p.path)).filter(Boolean);
-    if (paths.length > 0) addFiles(paths);
+    if (paths.length > 0) await addFiles(paths);
   });
 }
 

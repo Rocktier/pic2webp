@@ -507,22 +507,17 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
     drop(converting);
 
     std::thread::spawn(move || {
-        let scratch_root = std::env::temp_dir().join(format!(
-            "pic2webp-scratch-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis()).unwrap_or(0)
-        ));
-        let _ = std::fs::create_dir_all(&scratch_root);
-
+        // 转换总任务数（目录/递归展开后的真实数量）——前端进度条以此为分母
+        let _ = app_handle.emit("convert-total", all_files.len());
+    
         for src_path in all_files.iter() {
             if cancel_flag.load(Ordering::Relaxed) { break; }
             convert_single_file(src_path, &request, &mut stats, &app_handle,
                 &cancel_flag, &ffmpeg, quality);
         }
 
-        let _ = std::fs::remove_dir_all(&scratch_root);
-        stats.saved = stats.total_original - stats.total_converted;
+        // 目标大小模式下产物可能比原图大；总量与单文件口径保持一致（不让步到负数）
+        stats.saved = (stats.total_original - stats.total_converted).max(0);
         stats.saved_pct = if stats.total_original > 0 { (stats.saved * 100 / stats.total_original) as i32 } else { 0 };
         let _ = app_handle.emit("convert-done", &stats);
         if let Some(state) = app_handle.try_state::<AppState>() {

@@ -231,18 +231,6 @@ header {
 }
 	
 /* 空态折叠 */
-.empty-state-toggle {
-  display: flex; align-items: center; gap: 6px; cursor: pointer;
-  font-size: 11px; color: var(--text-tertiary); font-weight: 500;
-  padding: 2px 0; width: 100%; user-select: none;
-}
-.empty-state-toggle:hover { color: var(--accent); }
-.empty-state-toggle .chevron {
-  transition: transform .2s; display: inline-block; font-size: 10px;
-}
-.empty-state.collapsed .empty-state-body { display: none; }
-.empty-state.collapsed .empty-state-toggle { margin-bottom: 0; }
-.empty-state:not(.collapsed) .chevron { transform: rotate(180deg); }
 	
 	/* 文件行 */
 .file-item {
@@ -286,11 +274,6 @@ header {
 }
 .quality-label { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
 .quality-value { font-weight: 700; color: var(--accent); font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
-.slider-row { display: flex; align-items: center; gap: 6px; }
-.slider-end { font-size: 10px; color: var(--text-tertiary); white-space: nowrap; letter-spacing: 0.04em; }
-input[type="range"].quality-slider {
-  flex: 1; accent-color: var(--accent); height: 3px; cursor: pointer; border-radius: 2px;
-}
 
 /* Toggle — 规范 36×20，checked 变白，位移 16px */
 .toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; min-height: 20px; }
@@ -566,6 +549,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
             <svg class="moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
           </button>
           <select class="lang-toggle" id="lang-toggle"></select>
+          </div>
     </header>
 
     <!-- ===== Main layout ===== -->
@@ -590,7 +574,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
         <!-- File list -->
         <div class="file-list-header">
           <span><span class="file-count-dot"></span><span id="file-count-text" data-i18n="file-count" data-i18n-params='{"n":0}'>已选择 0 个文件</span></span>
-          <button id="clear-btn" class="btn-text" hidden data-i18n="clear">清空</button>
+          <span class="file-list-actions"><button id="folder-btn" class="btn-text" data-i18n="select-folder">选择文件夹</button><button id="clear-btn" class="btn-text" hidden data-i18n="clear">清空</button></span>
         </div>
         <div class="hint warn" id="folder-hint" hidden data-i18n="folder-hint">检测到文件夹，但未开启递归子目录。勾选「递归子目录」以处理其中的图片。</div>
         <div id="file-list" class="file-list">
@@ -677,7 +661,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
             </div>
             <div class="advanced-row">
               <label class="mini-toggle"><input type="checkbox" id="chk-structure" /><span data-i18n="preserve-structure">保留目录结构</span></label>
-              <label class="mini-toggle" style="margin-left:12px"><input type="checkbox" id="chk-exif" /><span data-i18n="strip-exif">清除 EXIF</span></label>
             </div>
           </div>
         </div>
