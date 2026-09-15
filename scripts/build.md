@@ -29,7 +29,7 @@ npm run tauri build
 "bundle": {
   "macOS": {
     "signing": {
-      "apple-id": "your@email.com",
+      "apple-id": "hello@rocktier.com",
       "team-id": "XXXXXXXXXX"
     }
   }
