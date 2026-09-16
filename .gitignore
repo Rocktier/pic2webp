@@ -1,6 +1,8 @@
 # ─── Rust / Tauri ───
 src-tauri/target/
-src-tauri/gen/schemas/
+src-tauri/gen/
+# 本机 cargo 镜像配置（rsproxy 等），不该进版本库
+.cargo/
 
 # ─── Node.js ───
 node_modules/
@@ -21,6 +23,7 @@ Thumbs.db
 *.dmg
 *.msi
 *.app
+*.log
 
 # ─── AI agent 工作文件（含个人信息，不提交）───
 findings.md
