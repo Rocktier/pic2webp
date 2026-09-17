@@ -1,7 +1,7 @@
 {
   "name": "pic2webp",
   "private": true,
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Rocktier Pic2WebP - Image to WebP converter",
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "tauri:windows:build": "tauri-windows-bundle build --runner npm",
     "build:release": "bash scripts/build-and-sign.sh"
   },
   "dependencies": {
@@ -17,6 +18,7 @@
     "@tauri-apps/plugin-opener": "^2.5.4"
   },
   "devDependencies": {
+    "@choochmeque/tauri-windows-bundle": "^0.1.29",
     "@tauri-apps/cli": "^2",
     "vite": "^6"
   }

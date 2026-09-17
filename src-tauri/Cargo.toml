@@ -1,6 +1,6 @@
 [package]
 name = "pic2webp"
-version = "1.9.0"
+version = "1.9.1"
 description = "图片转 WebP 工具 - Rocktier 出品"
 authors = ["Rocktier <hello@rocktier.com>"]
 edition = "2024"
