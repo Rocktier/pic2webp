@@ -3,7 +3,7 @@
   "productName": "Rocktier Pic2WebP",
   "mainBinaryName": "RocktierPic2WebP",
   "version": "1.9.1",
-  "identifier": "com.rocktier.pic2webp",
+  "identifier": "Rocktier.RocktierPic2WebP",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
