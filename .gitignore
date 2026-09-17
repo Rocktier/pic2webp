@@ -1,6 +1,9 @@
 # ─── Rust / Tauri ───
 src-tauri/target/
-src-tauri/gen/
+# gen/schemas 是 Tauri 生成的；gen/windows 是 MSIX 打包输入（清单模板 + 自有磁贴），
+# 必须进版本库——否则 CI 上打包器找不到 bundle.config.json，会退回默认磁贴（10.1.1.11 被拒的原因）。
+src-tauri/gen/*
+!src-tauri/gen/windows/
 # 本机 cargo 镜像配置（rsproxy 等），不该进版本库
 .cargo/
 
