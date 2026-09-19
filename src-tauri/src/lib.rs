@@ -453,7 +453,7 @@ fn convert_single_file(
         stats.total_original += original_size;
         stats.total_converted += original_size;
         emit_progress(app_handle, src_path, "skipped", "skipped", 0, 0);
-    } else if let Err(e) = std::fs::write(&output_str, &webp_mem) {
+    } else if let Err(e) = write_atomically(&output_str, &webp_mem) {
         stats.fail_count += 1;
         emit_progress(app_handle, src_path, "failed", &format!("write_fail:{}", e), 0, 0);
     } else {
@@ -482,6 +482,41 @@ fn convert_single_file(
     let _ = app_handle.emit("convert-stats", stats.clone());
 }
 
+/// Writes bytes to `path` atomically: temp file in the same directory, fsync, rename.
+///
+/// A plain `fs::write` truncates the target in place. A crash or a full disk then
+/// leaves a truncated `.webp` — and a truncated webp is *itself valid input*, so the
+/// next batch would happily re-encode the corpse and damage it further. The temp
+/// name carries a per-process sequence number so concurrent writers cannot collide.
+fn write_atomically(path: &str, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write as _;
+    let target = Path::new(path);
+    let dir = target.parent().ok_or_else(|| "invalid path".to_string())?;
+    let name = target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "invalid file name".to_string())?;
+    let tmp = dir.join(format!(
+        ".{}.{}.{}.tmp",
+        name,
+        std::process::id(),
+        TMP_SEQ.fetch_add(1, Ordering::Relaxed)
+    ));
+    {
+        let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        f.write_all(bytes).map_err(|e| e.to_string())?;
+        f.sync_all().map_err(|e| e.to_string())?;
+    }
+    if let Err(e) = std::fs::rename(&tmp, target) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e.to_string());
+    }
+    Ok(())
+}
+
+/// Makes each concurrent write use its own temp file. See `write_atomically`.
+static TMP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 // ─── Main conversion command ────────────────────────────────────────
 
 #[tauri::command]
@@ -509,17 +544,27 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
     std::thread::spawn(move || {
         // 转换总任务数（目录/递归展开后的真实数量）——前端进度条以此为分母
         let _ = app_handle.emit("convert-total", all_files.len());
-    
-        for src_path in all_files.iter() {
-            if cancel_flag.load(Ordering::Relaxed) { break; }
-            convert_single_file(src_path, &request, &mut stats, &app_handle,
-                &cancel_flag, &ffmpeg, quality);
-        }
 
-        // 目标大小模式下产物可能比原图大；总量与单文件口径保持一致（不让步到负数）
-        stats.saved = (stats.total_original - stats.total_converted).max(0);
-        stats.saved_pct = if stats.total_original > 0 { (stats.saved * 100 / stats.total_original) as i32 } else { 0 };
+        // 一次 panic（例如某张图让 libwebp 编码器炸掉）以前会把 is_converting 永久留在
+        // true：转换按钮失效、关窗被拦，只能杀进程。catch_unwind 把 panic 降级为一次失败
+        // 上报，下面的收尾必定执行；panic hook 会在控制台留下原因。
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            for src_path in all_files.iter() {
+                if cancel_flag.load(Ordering::Relaxed) { break; }
+                convert_single_file(src_path, &request, &mut stats, &app_handle,
+                    &cancel_flag, &ffmpeg, quality);
+            }
+
+            // 目标大小模式下产物可能比原图大；总量与单文件口径保持一致（不让步到负数）
+            stats.saved = (stats.total_original - stats.total_converted).max(0);
+            stats.saved_pct = if stats.total_original > 0 { (stats.saved * 100 / stats.total_original) as i32 } else { 0 };
+        }));
+        if outcome.is_err() {
+            stats.fail_count += 1;
+            emit_progress(&app_handle, "", "failed", "ERR_INTERNAL_PANIC", 0, 0);
+        }
         let _ = app_handle.emit("convert-done", &stats);
+        // 无论成功、失败还是 panic，都必须解锁——这是上面那条 panic 修复的意义所在。
         if let Some(state) = app_handle.try_state::<AppState>() {
             if let Ok(mut converting) = state.is_converting.lock() { *converting = false; }
         }
