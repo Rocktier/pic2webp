@@ -397,6 +397,19 @@ fn convert_single_file(
     let work_path = Path::new(src_path).to_path_buf();
     let original_size = std::fs::metadata(src_path).map(|m| m.len() as i64).unwrap_or(0);
 
+    // 「覆盖」模式 + `.webp` 输入时，输出路径解析出来就是源文件本身。那种情况下
+    // 继续走就是拿用户的原始文件做一次不可逆的重编码（还可能是无损→有损），
+    // 而且没有任何退路。在写盘之前直接跳过——旧代码只在写完之后才用
+    // `same_as_source` 阻止删源，那时原件已经被覆盖了。
+    if is_same_file(src_path, &output_path) {
+        stats.skip_count += 1;
+        stats.total_original += original_size;
+        stats.total_converted += original_size;
+        emit_progress(app_handle, src_path, "skipped", "skipped", 0, 0);
+        let _ = app_handle.emit("convert-stats", stats.clone());
+        return;
+    }
+
     // ── Decode ──    // ── Decode ──
     emit_progress(app_handle, src_path, "converting", "converting", 0, 0);
 
