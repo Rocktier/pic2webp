@@ -1,8 +1,8 @@
 <div align="center">
 
-# Pic2WebP
+# Rocktier Pic2WebP
 
-**图片转 WebP · 免费 · 本地处理 · 跨平台**
+**图片转 WebP · $4.99 一次买断 · 本地处理 · 跨平台**
 
  JPG / PNG / WebP / AVIF → WebP，质量 75-85 通常比原图小 25-50%
 
@@ -104,7 +104,7 @@ registry = "sparse+https://rsproxy.cn/index/"
 
 <div align="center">
 
-**JPG / PNG / WebP / AVIF → WebP converter · Free · Local · Cross-platform**
+**JPG / PNG / WebP / AVIF → WebP converter · $4.99 one-time purchase · Local · Cross-platform**
 
 Reduce image size by 25-50% at quality 75-85
 
