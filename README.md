@@ -26,7 +26,6 @@
 | ⏹️ **一键取消** | 批量转换中途可随时取消 |
 | 🔄 **失败重试** | 单个文件转换失败后可单独重试 |
 | 🛠️ **原生 WebP 编码** | 内置 WebP 引擎，无需安装任何工具 |
-| 🔧 **可选预压缩** | jpegoptim / pngquant / oxipng 自动检测并展示状态 |
 | 🔒 **完全离线** | 不发任何网络请求，不上传任何文件 |
 | 🌐 **中英双语** | 自动检测系统语言，一键切换 |
 | 🍎 **macOS 11+** | · | **Windows 10+** |
@@ -52,7 +51,7 @@
 
 - [Rust](https://rustup.rs/) 1.70+
 - [Node.js](https://nodejs.org/) 18+
-- 可选：jpegoptim / pngquant / oxipng（macOS: `brew install`）
+- 可选：[ffmpeg](https://ffmpeg.org/) —— 仅在把 GIF 动图转成动画 WebP 时需要；其余格式无需任何外部工具
 
 ### 启动
 
@@ -124,7 +123,6 @@ Reduce image size by 25-50% at quality 75-85
 | ⏹️ **Cancel anytime** | Stop batch conversion mid-process |
 | 🔄 **Retry failed** | Retry individual failed files |
 | 🛠️ **Native WebP** | Built-in encoder, no extra tools needed |
-| 🔧 **Optional pre-compression** | jpegoptim / pngquant / oxipng auto-detected and shown |
 | 🔒 **Fully offline** | No network requests, no uploads |
 | 🌐 **Bilingual** | Auto-detect system language, one-click toggle |
 | 🍎 **macOS 11+** | · | **Windows 10+** |
@@ -150,7 +148,7 @@ Get the latest release from [Releases](https://github.com/Rocktier/pic2webp/rele
 
 - [Rust](https://rustup.rs/) 1.70+
 - [Node.js](https://nodejs.org/) 18+
-- Optional: jpegoptim / pngquant / oxipng (macOS: `brew install`)
+- Optional: [ffmpeg](https://ffmpeg.org/), needed only to turn an animated GIF into an animated WebP. Every other format works with no external tools
 
 ### Quick start
 
