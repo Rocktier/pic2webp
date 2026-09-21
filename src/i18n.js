@@ -681,8 +681,6 @@ export function applyLang() {
 export function translateBackendMessage(message) {
   if (!message) return "";
   const patterns = [
-    { regex: /^precompress_jpeg$/, key: "msg-precompress-jpeg" },
-    { regex: /^precompress_png$/, key: "msg-precompress-png" },
     { regex: /^converting$/, key: "msg-converting" },
     { regex: /^converting_no_anim$/, key: "converting_no_anim" },
     { regex: /^skipped$/, key: "msg-skipped" },

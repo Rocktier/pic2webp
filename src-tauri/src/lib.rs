@@ -375,7 +375,11 @@ fn convert_single_file(
                 let pct = if original_size > 0 { (saved * 100 / original_size) as i32 } else { 0 };
                 emit_progress_with_output(app_handle, src_path, "done", &format!("saved:{}kb", new_size / 1024), saved, pct, Some(out_str.clone()));
                 if request.delete_source && !is_same_file(src_path, Path::new(&out_str)) {
-                    let _ = std::fs::remove_file(src_path);
+                    // 与非 GIF 分支保持一致：删不掉要报，不能悄悄吞掉，
+                    // 否则用户以为源文件已经没了，其实还在原地。
+                    if let Err(e) = std::fs::remove_file(src_path) {
+                        emit_progress(app_handle, src_path, "done", &format!("delete_fail:{}", e), saved, pct);
+                    }
                 }
             } else {
                 stats.fail_count += 1;
@@ -523,6 +527,14 @@ fn write_atomically(path: &str, bytes: &[u8]) -> Result<(), String> {
     if let Err(e) = std::fs::rename(&tmp, target) {
         let _ = std::fs::remove_file(&tmp);
         return Err(e.to_string());
+    }
+    // Persist the rename itself, so the directory entry survives a crash too.
+    // rename() 只发布了新名字，目录项本身可能还在页缓存里。
+    #[cfg(unix)]
+    {
+        if let Ok(d) = std::fs::File::open(dir) {
+            let _ = d.sync_all();
+        }
     }
     Ok(())
 }
