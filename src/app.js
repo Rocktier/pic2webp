@@ -111,21 +111,29 @@ async function addFiles(paths) {
   renderFiles();
   checkFileWarnings();
   updateConvertBtn();
-  if (skippedExt.length > 0) showUnsupportedHint(skippedExt.length);
+  if (skippedExt.length > 0) showUnsupportedHint(skippedExt);
   // Best-effort fetch file sizes for large-file detection
   fetchFileSizes();
   checkFolderHint(paths);
   dropzone.classList.remove("empty");
 }
 
-// 在文件列表顶部显示一条临时提示：拖入了不支持的文件
-function showUnsupportedHint(n) {
+// 在文件列表顶部显示一条临时提示：拖入了不支持的文件。
+// HEIC 单独说明——它是最常见的"为什么加不进来"（iPhone 默认格式），
+// 一句泛泛的"不支持"只会让用户反复重试。
+function showUnsupportedHint(skipped) {
   const existing = document.getElementById("batch-warning");
   if (existing) existing.remove();
+  const heic = skipped.filter((p) => fileExt(p) === "heic" || fileExt(p) === "heif").length;
+  const others = skipped.length - heic;
+  let text = "";
+  if (heic > 0) text = t("unsupported-heic", { n: heic });
+  if (others > 0) text += (text ? " · " : "") + t("unsupported-dropped", { n: others });
+  if (!text) return;
   const warn = document.createElement("div");
   warn.id = "batch-warning";
   warn.className = "hint warn";
-  warn.textContent = t("unsupported-dropped", { n });
+  warn.textContent = text;
   const header = document.querySelector(".file-list-header");
   if (header) header.insertAdjacentElement("afterend", warn);
 }
@@ -534,16 +542,26 @@ function updateConvertBtn() {
 
 // ─── Start conversion ───────────────────────────────────────────────
 
+// 取消在 IPC 往返途中点击时，后端会在 start_convert 里把取消标志清零
+// （防止上一轮的残留取消杀掉新批次）。Promise 解析发生在清零之后，
+// 所以这里记住这笔取消，由 startConvert 在 await 之后补发一次。
+let cancelPending = false;
+
 async function startConvert() {
   retryBase = null;
   totalTasks = files.length;
   if (isConverting) return;
+  cancelPending = false;
 
   // P0-3: Confirm before deleting source files
   if (chkDelete.checked) {
     const yes = await ask(t("confirm-delete"), { title: "Pic2WebP", kind: "warning" });
     if (!yes) return;
   }
+
+  // P0-C1: 整批产物落在同一个卷上。先确认目标卷装得下这一批，
+  // 否则会一个接一个 write_fail，用户看到的是一片红色失败。
+  if (!(await confirmDiskSpace())) return;
 
   isConverting = true;
   updateConvertBtn();
@@ -565,6 +583,11 @@ async function startConvert() {
   const req = buildRequest(files.map((f) => f.path), { baseDir });
   try {
     await invoke("start_convert", { request: req });
+    // 见 cancelPending：取消若赶在后端清零之前点击，这里补刀。
+    if (cancelPending) {
+      cancelPending = false;
+      invoke("cancel_convert").catch((e) => console.warn("Cancel failed:", e));
+    }
   } catch (e) {
     for (const f of files) {
       f.status = "pending";
@@ -577,6 +600,31 @@ async function startConvert() {
     updateConvertBtn();
     alert(t("convert-failed") + ": " + e);
   }
+}
+
+// P0-C1: 目标卷剩余空间能否容纳本批。返回 false = 用户叫停。
+// 探测失败不阻塞（宁漏报不误报），写盘时报错一样看得见。
+async function confirmDiskSpace() {
+  if (!isTauri()) return true;
+  const need = files.reduce((sum, f) => sum + (f.size > 0 ? f.size : 0), 0);
+  if (need <= 0) return true; // 体积未知（目录项/未取到大小）——无法估算，跳过
+  const dest = selectedDir || (files[0]?.path
+    ? files[0].path.split(/[/\\]/).slice(0, -1).join("/")
+    : null);
+  if (!dest) return true;
+  try {
+    const free = await invoke("check_disk_space", { path: dest });
+    // +10% 余量：目录元数据、时间戳命名重试、目标大小模式都可能放大产物
+    if (typeof free === "number" && free < need * 1.1) {
+      return await ask(t("confirm-disk-space", {
+        free: formatBytes(free),
+        need: formatBytes(need),
+      }), { title: "Pic2WebP", kind: "warning" });
+    }
+  } catch (e) {
+    console.warn("Disk space probe failed:", e);
+  }
+  return true;
 }
 
 // ─── Retry single failed file ──────────────────────────────────────
@@ -720,28 +768,34 @@ namingPills.querySelectorAll(".pill-btn").forEach((btn) => {
   });
 });
 
-// Output dir
+// Output dir —— 记住上次选择（localStorage），不必每次开应用重选
+const OUTPUT_DIR_KEY = "pic2webp-output-dir";
+
+function applyOutputDir(dir) {
+  selectedDir = dir || null;
+  outputDir.value = dir || "";
+  dirClear.hidden = !dir;
+  if (dir) localStorage.setItem(OUTPUT_DIR_KEY, dir);
+  else localStorage.removeItem(OUTPUT_DIR_KEY);
+}
+
 dirBtn.addEventListener("click", async () => {
   try {
     const dir = await open({ directory: true, title: t("select-output-dir") });
-    if (dir) {
-      selectedDir = dir;
-      outputDir.value = dir;
-      dirClear.hidden = false;
-    }
+    if (dir) applyOutputDir(dir);
   } catch (e) {
     console.log("Dialog not available:", e);
   }
 });
 
 dirClear.addEventListener("click", () => {
-  selectedDir = null;
-  outputDir.value = "";
-  dirClear.hidden = true;
+  applyOutputDir(null);
 });
 
 convertBtn.addEventListener("click", () => {
   if (isConverting) {
+    // latch：取消若赶在后端清零之前，startConvert 在 await 之后补发
+    cancelPending = true;
     invoke("cancel_convert").catch((e) => console.warn("Cancel failed:", e));
   } else {
     startConvert();
@@ -967,6 +1021,9 @@ async function init() {
   updateLangToggle();
   // 语言已就绪：此刻构建菜单才能用上用户保存的语言
   if (isTauri()) invoke("build_menu", { lang: getLang() }).catch(() => {});
+
+  // 恢复上次的输出目录（目录后来被删掉也没关系：后端 create_dir_all 会建回来）
+  applyOutputDir(localStorage.getItem(OUTPUT_DIR_KEY));
 
   // First render so the empty-state guide toggle gets its click listener bound
   renderFiles();

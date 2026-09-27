@@ -166,6 +166,28 @@ fn get_file_size(path: String) -> Result<u64, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Free space (bytes) of the volume holding `path`.
+///
+/// The whole batch lands on one volume, so a pre-flight check here turns a
+/// run of per-file `write_fail`s into one honest yes/no before any image is
+/// touched.  `path` need not exist yet (the output dir may still have to be
+/// created) — we walk up to the first existing ancestor and probe that.
+#[tauri::command]
+fn check_disk_space(path: String) -> Result<u64, String> {
+    let mut probe = Path::new(&path).to_path_buf();
+    while !probe.exists() {
+        match probe.parent() {
+            Some(p) if !p.as_os_str().is_empty() => probe = p.to_path_buf(),
+            _ => return Err("path does not exist".into()),
+        }
+    }
+    // is_dir() follows symlinks; a dir is a fine probe point either way.
+    if !probe.is_dir() {
+        if let Some(p) = probe.parent() { probe = p.to_path_buf(); }
+    }
+    fs2::available_space(&probe).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn is_dir(path: String) -> Result<bool, String> {
     Ok(Path::new(&path).is_dir())
@@ -341,6 +363,10 @@ fn convert_single_file(
     ffmpeg: &Option<String>,
     quality: i32,
 ) {
+    // 取消必须单文件内也生效：只在批次间隙检查标志的话，一张 100MB /
+    // 25M 像素大图的解码+编码要好几分钟，那段时间里点取消毫无反应。
+    if cancel_flag.load(Ordering::Relaxed) { return; }
+
     let path = Path::new(src_path);
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     let parent = path.parent().unwrap_or(Path::new(""));
@@ -448,6 +474,8 @@ fn convert_single_file(
         }
     };
 
+    // 解码是最大的单文件耗时点；取消赶在这里就不要再编码、更不要写盘。
+    if cancel_flag.load(Ordering::Relaxed) { return; }
     img = apply_resize(img, request);
 
     // ── Encode ──
@@ -464,6 +492,8 @@ fn convert_single_file(
     };
 
     // ── Write result ──
+    // 目标大小模式会编码多个候选，耗时同样集中在这里；写盘前再让取消一次。
+    if cancel_flag.load(Ordering::Relaxed) { return; }
     let new_size = webp_mem.len() as i64;
     if new_size >= original_size && original_size > 0 && request.target_size_kb.is_none() {
         stats.skip_count += 1;
@@ -973,7 +1003,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             start_convert, cancel_convert, force_close, get_file_size,
-            is_dir, generate_thumbnail, build_menu
+            check_disk_space, is_dir, generate_thumbnail, build_menu
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -983,4 +1013,36 @@ pub fn run() {
 #[tauri::command]
 fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     menu::build(&app, &lang).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disk_probe_walks_up_from_missing_path() {
+        // 输出目录可能还不存在：探测应上溯到第一个存在的祖先（此处即临时目录）
+        let missing = std::env::temp_dir().join("pic2webp-probe-nope/deeper/still-nope");
+        let free = check_disk_space(missing.to_string_lossy().to_string());
+        assert!(free.is_ok(), "probe failed: {:?}", free.err());
+        assert!(free.unwrap() > 0);
+    }
+
+    #[test]
+    fn disk_probe_existing_dir() {
+        let free = check_disk_space(std::env::temp_dir().to_string_lossy().to_string());
+        assert!(free.is_ok(), "probe failed: {:?}", free.err());
+        assert!(free.unwrap() > 0);
+    }
+
+    #[test]
+    fn disk_probe_file_probes_its_parent() {
+        // 传一个文件路径也应可用（取其所在卷）
+        let f = std::env::temp_dir().join("pic2webp-probe-file.bin");
+        std::fs::write(&f, b"x").unwrap();
+        let free = check_disk_space(f.to_string_lossy().to_string());
+        assert!(free.is_ok(), "probe failed: {:?}", free.err());
+        assert!(free.unwrap() > 0);
+        std::fs::remove_file(&f).ok();
+    }
 }
