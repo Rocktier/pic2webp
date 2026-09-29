@@ -913,9 +913,10 @@ if (themeToggle) {
   function applyTheme(useDark) {
     const mode = useDark ? "mode-dark" : "mode-light";
     if (useDark) {
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
+      // Dark is the family default — no attribute means dark.
       document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.setAttribute("data-theme", "light");
     }
     themeToggle.className = `theme-toggle ${mode}`;
     themeToggle.title = useDark ? "Dark mode" : "Light mode";

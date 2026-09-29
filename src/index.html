@@ -5,30 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pic2WebP</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%3E%3Crect%20x%3D%2232%22%20y%3D%2232%22%20width%3D%22960%22%20height%3D%22960%22%20rx%3D%22200%22%20fill%3D%22%230A0A0A%22%2F%3E%3Cg%20transform%3D%22translate%28128%2C128%29%20scale%280.85%29%22%3E%3Ccircle%20cx%3D%22180%22%20cy%3D%22180%22%20r%3D%22160%22%20fill%3D%22none%22%20stroke%3D%22%23FFFFFF%22%20stroke-width%3D%2224%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpolyline%20points%3D%22120%2C185%20165%2C230%20245%2C130%22%20fill%3D%22none%22%20stroke%3D%22%23FFFFFF%22%20stroke-width%3D%2228%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fg%3E%3Ccircle%20cx%3D%22860%22%20cy%3D%22164%22%20r%3D%2236%22%20fill%3D%22%23FF4A3D%22%2F%3E%3Ctext%20x%3D%22512%22%20y%3D%22640%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-weight%3D%22700%22%20font-size%3D%22360%22%20fill%3D%22%23FFFFFF%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22central%22%20letter-spacing%3D%22-20%22%3EWP%3C%2Ftext%3E%3C%2Fsvg%3E" />
+  <link rel="stylesheet" href="./fonts.css" />
   <style>
-/* Geist 家族品牌字体（2026-09-28 定案，audit 7B-5；SIL OFL 自托管可变字体） */
-@font-face {
-  font-family: "Geist";
-  src: url("./fonts/Geist-Variable.woff2") format("woff2");
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Geist Mono";
-  src: url("./fonts/GeistMono-Variable.woff2") format("woff2");
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
+/* 字体声明已移至 ./fonts.css（内联写法依赖 Vite 的 html-proxy 重写，换构建方式会静默丢字体） */
 
 
 /* ═══════════ ROCKTIER UI · Pic2WebP ═══════════
    Nothing OS 黑白极简几何 · 玻璃拟态 · 点阵纹理
-   主题约定（兼容既有 app.js）：无 data-theme = 浅色，data-theme="dark" = 深色 */
+   主题约定（兼容既有 app.js）：无 data-theme = 深色，data-theme="light" = 浅色 */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-card: rgba(255,255,255,0.03);
+  --bg-card-hover: rgba(255,255,255,0.06);
+  --border: rgba(255,255,255,0.06);
+  --border-hover: rgba(255,255,255,0.15);
+  --text-primary: rgba(255,255,255,0.95);
+  --text-secondary: rgba(255,255,255,0.72);
+  --text-tertiary: rgba(255,255,255,0.58);
+  --accent: #ffffff;
+  --on-accent: #000000;
+  --accent-glow: rgba(255,255,255,0.15);
+  --red: #ff4a3d;
+  --dot: rgba(255,255,255,0.55);
+  --danger: rgba(255,74,61,0.9);
+  --success: rgba(48,209,88,0.9);
+  --shadow: rgba(0,0,0,0.5);
+  --scrollbar: rgba(255,255,255,0.1);
+  --scrollbar-hover: rgba(255,255,255,0.2);
+  --selection: rgba(255,255,255,0.15);
+}
+
+[data-theme="light"] {
   --bg-primary: #ffffff;
   --bg-secondary: #f5f5f5;
   --bg-card: rgba(0,0,0,0.03);
@@ -39,7 +49,7 @@
   --text-secondary: rgba(0,0,0,0.64);
   --text-tertiary: rgba(0,0,0,0.6);
   --accent: #000000;
-  --accent-text: #ffffff;
+  --on-accent: #ffffff;
   --accent-glow: rgba(0,0,0,0.12);
   --red: #e64537;
   --dot: rgba(0,0,0,0.55);
@@ -57,29 +67,6 @@
     Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica,
     Arial, sans-serif;
   --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
-}
-
-[data-theme="dark"] {
-  --bg-primary: #000000;
-  --bg-secondary: #0a0a0a;
-  --bg-card: rgba(255,255,255,0.03);
-  --bg-card-hover: rgba(255,255,255,0.06);
-  --border: rgba(255,255,255,0.06);
-  --border-hover: rgba(255,255,255,0.15);
-  --text-primary: rgba(255,255,255,0.95);
-  --text-secondary: rgba(255,255,255,0.72);
-  --text-tertiary: rgba(255,255,255,0.58);
-  --accent: #ffffff;
-  --accent-text: #000000;
-  --accent-glow: rgba(255,255,255,0.15);
-  --red: #ff4a3d;
-  --dot: rgba(255,255,255,0.55);
-  --danger: rgba(255,74,61,0.9);
-  --success: rgba(48,209,88,0.9);
-  --shadow: rgba(0,0,0,0.5);
-  --scrollbar: rgba(255,255,255,0.1);
-  --scrollbar-hover: rgba(255,255,255,0.2);
-  --selection: rgba(255,255,255,0.15);
 }
 
 /* 统一主题过渡 + 尊重系统减弱动态 */
@@ -307,7 +294,7 @@ header {
 .toggle-row input:checked + .toggle-track { background: var(--accent); }
 .toggle-thumb {
   position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-  background: var(--accent-text); border-radius: 50%;
+  background: var(--on-accent); border-radius: 50%;
   transition: transform .25s cubic-bezier(.25,.1,.25,1); box-shadow: 0 1px 3px var(--shadow);
 }
 .toggle-row input:checked + .toggle-track .toggle-thumb { transform: translateX(16px); }
@@ -328,7 +315,7 @@ header {
   display: inline-flex; align-items: center; justify-content: center;
 }
 .pill-btn:hover { background: var(--bg-card-hover); border-color: var(--border-hover); color: var(--text-primary); }
-.pill-btn.active, .pill-btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.pill-btn.active, .pill-btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
 .dir-row { display: flex; gap: 6px; align-items: center; }
 .dir-input {
@@ -381,7 +368,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary {
   width: 100%; min-width: 140px; padding: 9px;
   border: none; border-radius: var(--radius-md);
-  background: var(--accent); color: var(--accent-text);
+  background: var(--accent); color: var(--on-accent);
   font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 7px;
   letter-spacing: 0.01em;
@@ -442,14 +429,14 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
   cursor: pointer; flex-shrink: 0; outline: none; appearance: none;
   -webkit-appearance: none; -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 6 4-6z' fill='rgba(0,0,0,0.5)'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 6 4-6z' fill='rgba(255,255,255,0.6)'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 6px center; background-size: 6px;
   transition: all .2s;
 }
 .lang-toggle:hover { border-color: var(--border-hover); }
 .lang-toggle option { font-size: 11px; color: var(--text-primary); background: var(--bg-primary); }
-[data-theme="dark"] .lang-toggle {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 6 4-6z' fill='rgba(255,255,255,0.6)'/%3E%3C/svg%3E");
+[data-theme="light"] .lang-toggle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 6 4-6z' fill='rgba(0,0,0,0.5)'/%3E%3C/svg%3E");
 }
 
 .theme-toggle {
@@ -466,7 +453,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 /* ───────── Spinner ───────── */
 .spinner {
   width: 14px; height: 14px; border: 2px solid var(--accent-glow);
-  border-top-color: var(--accent-text); border-radius: 50%;
+  border-top-color: var(--on-accent); border-radius: 50%;
   animation: spin .6s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -506,7 +493,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   background: var(--bg-card); color: var(--text-secondary); font-size: 11px; cursor: pointer;
   font-weight: 500;
 }
-.compare-mode-btn.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.compare-mode-btn.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .compare-mode-btn:hover:not(.active) { border-color: var(--border-hover); }
 
 /* 叠加 slider 模式 */
@@ -534,7 +521,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .compare-slider-handle {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: 24px; height: 24px; border-radius: 50%;
-  background: var(--red); border: 3px solid var(--accent-text);
+  background: var(--red); border: 3px solid var(--on-accent);
   z-index: 3; cursor: ew-resize;
   box-shadow: 0 0 8px rgba(0,0,0,0.3);
 }

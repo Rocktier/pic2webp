@@ -1,0 +1,23 @@
+/* Geist — Rocktier 家族品牌字体（2026-09-28 定案，audit 7B-5）
+   SIL OFL 1.1 自托管可变字体，授权见 fonts/OFL.txt。
+
+   为什么要独立成文件：此前 @font-face 内联在 index.html 的 <style> 里，
+   url("./fonts/...") 只能靠 Vite 的 html-proxy&inline-css 重写才生效 ——
+   一旦换构建方式（或把这段 CSS 搬到别处），字体会被静默丢弃且无任何报错。
+   独立 CSS + <link> 是构建器无关的标准写法。 */
+
+@font-face {
+  font-family: "Geist";
+  src: url("./fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
