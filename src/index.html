@@ -37,6 +37,17 @@
   --scrollbar: rgba(255,255,255,0.1);
   --scrollbar-hover: rgba(255,255,255,0.2);
   --selection: rgba(255,255,255,0.15);
+  /* 结构性令牌（圆角/字体）是主题无关的，必须住在 :root。
+     之前只写在 light 块里：默认深色主题下 26 处 var() 全部失效，
+     圆角退化为 0、font 简写整条失效（13px/1.55 一起丢）。 */
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+  --font: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica,
+    Arial, sans-serif;
+  --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 }
 
 [data-theme="light"] {
@@ -60,14 +71,6 @@
   --scrollbar: rgba(0,0,0,0.12);
   --scrollbar-hover: rgba(0,0,0,0.25);
   --selection: rgba(0,0,0,0.12);
-  --radius-sm: 12px;
-  --radius-md: 20px;
-  --radius-lg: 28px;
-  --radius-pill: 999px;
-  --font: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
-    Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica,
-    Arial, sans-serif;
-  --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 }
 
 /* 统一主题过渡 + 尊重系统减弱动态 */
