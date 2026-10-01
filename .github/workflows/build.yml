@@ -162,7 +162,11 @@ jobs:
         run: |
           set -euo pipefail
           echo "Verifying release $TAG"
-          for i in $(seq 1 18); do
+          # Uploads are done (needs: build jobs); GitHub's asset API can lag
+          # minutes before a freshly-uploaded file appears in `gh release view`.
+          # Poll up to ~10 min with an initial settle delay before giving up.
+          sleep 20
+          for i in $(seq 1 30); do
             assets=$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)
             ok=1
             for pat in $REQUIRED_ASSETS; do
@@ -170,7 +174,7 @@ jobs:
             done
             [ "$ok" -eq 1 ] && break
             echo "  waiting for uploads ($(printf '%s\n' "$assets" | grep -c . || true) so far)..."
-            sleep 10
+            sleep 20
           done
           missing=0
           for pat in $REQUIRED_ASSETS; do
