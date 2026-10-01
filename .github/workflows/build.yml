@@ -125,6 +125,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'macos-latest'
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
           files: |
             Pic2WebP_*.dmg
             Rocktier.Pic2WebP.app.zip
@@ -134,8 +135,53 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'windows-latest'
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
           files: |
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/msix/*.msix*
           generate_release_notes: true
+
+  # 发布闸门：两平台都传完之后，先校验资产清单齐全，再把草稿发布为 latest。
+  # 不齐就保留草稿并让 job 失败 —— 用户永远不会拿到残缺包。
+  # 仅 tag 推送时运行（main 推送不创建 release，跳过）。
+  publish:
+    name: Verify & Publish Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      REQUIRED_ASSETS: '\.dmg$ \.app\.zip$ \.msi$ \.exe$ \.msix$ \.msixbundle$'
+    steps:
+      - name: Verify assets then publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "Verifying release $TAG"
+          for i in $(seq 1 18); do
+            assets=$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)
+            ok=1
+            for pat in $REQUIRED_ASSETS; do
+              printf '%s\n' "$assets" | grep -Eq "$pat" || ok=0
+            done
+            [ "$ok" -eq 1 ] && break
+            echo "  waiting for uploads ($(printf '%s\n' "$assets" | grep -c . || true) so far)..."
+            sleep 10
+          done
+          missing=0
+          for pat in $REQUIRED_ASSETS; do
+            if ! printf '%s\n' "$assets" | grep -Eq "$pat"; then
+              echo "::error::release $TAG missing asset matching $pat"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::release $TAG is missing required assets — left as DRAFT for manual review"
+            exit 1
+          fi
+          echo "All required assets present; publishing $TAG"
+          gh release edit "$TAG" --draft=false --latest
