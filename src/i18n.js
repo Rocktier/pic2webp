@@ -3,7 +3,11 @@
 const LANGUAGES = [
   { code: "en", label: "English" },
   { code: "zh", label: "中文" },
-  { code: "ja", label: "日本語" },
+  { code: "ja", label: "日本語"   failed: "失败",
+  source: "来源",
+  image: "图片",
+  format: "格式",
+},
   { code: "ko", label: "한국어" },
   { code: "de", label: "Deutsch" },
   { code: "es", label: "Español" },
