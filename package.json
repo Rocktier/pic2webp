@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:windows:build": "tauri-windows-bundle build --runner npm",
-    "build:release": "bash scripts/build-and-sign.sh"
+    "build:release": "bash scripts/build-and-sign.sh",
+    "family:check": "node scripts/family-check.mjs --self --product pic2webp"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

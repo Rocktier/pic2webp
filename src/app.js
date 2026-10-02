@@ -907,7 +907,7 @@ function updateLangToggle() {
 
 // ── Dark mode with system theme follow ──
 if (themeToggle) {
-  const savedTheme = localStorage.getItem("pic2webp-theme");
+  const savedTheme = localStorage.getItem("rocktier.theme");
   const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
   
   function applyTheme(useDark) {
@@ -940,26 +940,26 @@ if (themeToggle) {
   }
   
   darkModeMedia.addEventListener("change", () => {
-    if (!localStorage.getItem("pic2webp-theme")) {
+    if (!localStorage.getItem("rocktier.theme")) {
       applySystemTheme();
     }
   });
   
   themeToggle.addEventListener("click", () => {
-    const saved = localStorage.getItem("pic2webp-theme");
+    const saved = localStorage.getItem("rocktier.theme");
 
     if (saved === "dark") {
       // dark → light
       applyTheme(false);
-      localStorage.setItem("pic2webp-theme", "light");
+      localStorage.setItem("rocktier.theme", "light");
     } else if (saved === "light") {
       // light → auto (system follow)
-      localStorage.removeItem("pic2webp-theme");
+      localStorage.removeItem("rocktier.theme");
       applySystemTheme();
     } else {
       // auto → dark
       applyTheme(true);
-      localStorage.setItem("pic2webp-theme", "dark");
+      localStorage.setItem("rocktier.theme", "dark");
     }
   });
 }

@@ -640,7 +640,7 @@ export function getLanguages() {
 }
 
 export function initLang() {
-  const saved = localStorage.getItem("pic2webp-lang");
+  const saved = localStorage.getItem("rocktier.lang");
   const codes = LANGUAGES.map((l) => l.code);
   // 家族约定：无保存偏好时默认英文，不跟随系统语言
   currentLang = codes.includes(saved) ? saved : "en";
@@ -653,7 +653,7 @@ export function setLang(code) {
   const codes = LANGUAGES.map((l) => l.code);
   if (codes.includes(code)) {
     currentLang = code;
-    localStorage.setItem("pic2webp-lang", currentLang);
+    localStorage.setItem("rocktier.lang", currentLang);
     applyLang();
   }
 }
@@ -662,7 +662,7 @@ export function toggleLang() {
   const codes = LANGUAGES.map((l) => l.code);
   const idx = codes.indexOf(currentLang);
   currentLang = codes[(idx + 1) % codes.length];
-  localStorage.setItem("pic2webp-lang", currentLang);
+  localStorage.setItem("rocktier.lang", currentLang);
   applyLang();
   return currentLang;
 }
