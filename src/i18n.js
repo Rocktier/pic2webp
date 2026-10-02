@@ -168,7 +168,11 @@ const dict = {
     "remove-file": "移除",
     "compare-side-by-side": "并排对比",
     "compare-slider": "叠加对比",
-  },
+    failed: "失败",
+  source: "来源",
+  image: "图片",
+  format: "格式",
+},
 
   ja: {
     "subtitle": "画像をWebPに変換 · Rocktier ツール",
