@@ -83,7 +83,7 @@ function formatBytes(bytes, decimals = 1) {
 
 // ─── Add files ───────────────────────────────────────────────────────
 
-const SUPPORTED_EXTS = ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp", "tiff"];
+const SUPPORTED_EXTS = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
 
 function fileExt(p) {
   const name = p.split(/[/\\]/).pop() || "";
@@ -712,7 +712,7 @@ dropzone.addEventListener("click", async () => {
     const result = await open({
       multiple: true,
       filters: [
-        { name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp", "tiff"] }
+        { name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"] }
       ]
     });
     if (result && Array.isArray(result)) {

@@ -15,7 +15,7 @@ const dict = {
   en: {
     "subtitle": "Images to WebP · A Rocktier tool",
     "dropzone-text": "Drop images here",
-    "dropzone-hint": "or click to select · JPG / PNG / GIF / BMP / TIFF / WebP / AVIF",
+    "dropzone-hint": "or click to select · JPG / PNG / GIF / BMP / TIFF / WebP",
     "empty-hint": "Drop images here to start · WebP output, processed locally",
     "file-count": "{n} file(s) selected",
     "clear": "Clear",
@@ -92,7 +92,7 @@ const dict = {
   zh: {
     "subtitle": "图片转 WebP · 免费 · 本地处理",
     "dropzone-text": "拖拽图片到此处",
-    "dropzone-hint": "或点击选择文件 · 支持 JPG / PNG / GIF / BMP / TIFF / WebP / AVIF",
+    "dropzone-hint": "或点击选择文件 · 支持 JPG / PNG / GIF / BMP / TIFF / WebP",
     "empty-hint": "拖入图片即可开始 · 输出 WebP，本地处理不上传",
     "file-count": "已选择 {n} 个文件",
     "clear": "清空",
@@ -169,7 +169,7 @@ const dict = {
   ja: {
     "subtitle": "画像をWebPに変換 · Rocktier ツール",
     "dropzone-text": "画像をここにドロップ",
-    "dropzone-hint": "またはクリックで選択 · JPG / PNG / GIF / BMP / TIFF / WebP / AVIF",
+    "dropzone-hint": "またはクリックで選択 · JPG / PNG / GIF / BMP / TIFF / WebP",
     "empty-hint": "画像をドロップして開始 · WebP 出力、ローカル処理",
     "file-count": "{n} 個のファイルを選択",
     "clear": "クリア",
@@ -246,7 +246,7 @@ const dict = {
   ko: {
     "subtitle": "이미지를 WebP로 변환 · 무료 · 로컬 처리",
     "dropzone-text": "이미지를 여기에 드롭",
-    "dropzone-hint": "또는 클릭하여 선택 · JPG / PNG / GIF / BMP / TIFF / WebP / AVIF",
+    "dropzone-hint": "또는 클릭하여 선택 · JPG / PNG / GIF / BMP / TIFF / WebP",
     "empty-hint": "이미지를 드롭해 시작 · WebP 출력, 로컬 처리",
     "file-count": "{n}개 파일 선택됨",
     "clear": "지우기",
@@ -323,7 +323,7 @@ const dict = {
   de: {
     "subtitle": "Bilder zu WebP · Ein Rocktier Tool",
     "dropzone-text": "Bilder hier ablegen",
-    "dropzone-hint": "oder klicken zum Auswählen · JPG / PNG / GIF / BMP / TIFF / WebP / AVIF",
+    "dropzone-hint": "oder klicken zum Auswählen · JPG / PNG / GIF / BMP / TIFF / WebP",
     "empty-hint": "Bilder hierher ziehen · WebP-Ausgabe, lokal verarbeitet",
     "file-count": "{n} Datei(en) ausgewählt",
     "clear": "Leeren",
@@ -400,7 +400,7 @@ const dict = {
   es: {
     "subtitle": "Imágenes a WebP · Una herramienta Rocktier",
     "dropzone-text": "Arrastra imágenes aquí",
-    "dropzone-hint": "o haz clic para seleccionar · JPG / PNG / GIF / BMP / TIFF / WebP / AVIF",
+    "dropzone-hint": "o haz clic para seleccionar · JPG / PNG / GIF / BMP / TIFF / WebP",
     "empty-hint": "Arrastra imágenes para empezar · salida WebP, procesado local",
     "file-count": "{n} archivo(s) seleccionado(s)",
     "clear": "Limpiar",
@@ -477,7 +477,7 @@ const dict = {
   pt: {
     "subtitle": "Imagens para WebP · Uma ferramenta Rocktier",
     "dropzone-text": "Arraste imagens aqui",
-    "dropzone-hint": "ou clique para selecionar · JPG / PNG / GIF / BMP / TIFF / WebP / AVIF",
+    "dropzone-hint": "ou clique para selecionar · JPG / PNG / GIF / BMP / TIFF / WebP",
     "empty-hint": "Solte imagens para começar · saída WebP, processamento local",
     "file-count": "{n} arquivo(s) selecionado(s)",
     "clear": "Limpar",
@@ -554,7 +554,7 @@ const dict = {
   ar: {
     "subtitle": "تحويل الصور إلى WebP · أداة Rocktier",
     "dropzone-text": "أسقط الصور هنا",
-    "dropzone-hint": "أو انقر لاختيار الملفات · JPG / PNG / GIF / BMP / TIFF / WebP / AVIF",
+    "dropzone-hint": "أو انقر لاختيار الملفات · JPG / PNG / GIF / BMP / TIFF / WebP",
     "empty-hint": "أفلت الصور للبدء · إخراج WebP ومعالجة محلية",
     "file-count": "تم اختيار {n} ملف",
     "clear": "مسح",

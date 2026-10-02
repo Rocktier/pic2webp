@@ -461,10 +461,21 @@ fn convert_single_file(
         }
     }
 
-    let mut img = match ImageReader::open(&work_path)
+    let reader = match ImageReader::open(&work_path)
         .map_err(|e| format!("open_fail:{}", e))
-        .and_then(|r| r.decode().map_err(|e| format!("decode_fail:{}", e)))
+        .and_then(|r| r.with_guessed_format().map_err(|e| format!("open_fail:{}", e)))
     {
+        Ok(r) => r,
+        Err(e) => {
+            stats.fail_count += 1;
+            emit_progress(app_handle, src_path, "failed", &e, 0, 0);
+            let _ = app_handle.emit("convert-stats", stats.clone());
+            return;
+        }
+    };
+    // EXIF 方向：image 不会自动应用，必须手动，否则 iPhone 竖拍导出后全部横躺（P0-21）
+    let orientation = reader.orientation().unwrap_or(image::imageops::Orientation::Normal);
+    let mut img = match reader.decode().map_err(|e| format!("decode_fail:{}", e)) {
         Ok(img) => img,
         Err(e) => {
             stats.fail_count += 1;
@@ -473,6 +484,7 @@ fn convert_single_file(
             return;
         }
     };
+    img.apply_orientation(orientation);
 
     // 解码是最大的单文件耗时点；取消赶在这里就不要再编码、更不要写盘。
     if cancel_flag.load(Ordering::Relaxed) { return; }

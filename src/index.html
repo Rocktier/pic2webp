@@ -484,9 +484,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .progress-bar-container {
   padding: 4px 0 0; display: flex; align-items: center; gap: 8px;
 }
-.progress-bar { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.progress-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
 .progress-bar-fill { height: 100%; background: var(--red); width: 0%; transition: width .3s ease; }
-.progress-text { font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); white-space: nowrap; }
+.progress-text { font-size: 18px; font-weight: 700; color: var(--text-secondary); font-family: var(--font-mono); white-space: nowrap; }
 
 /* 对比模式切换 */
 .compare-toolbar {
@@ -572,7 +572,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
               </svg>
             </div>
             <p class="dropzone-text" data-i18n="dropzone-text">拖拽图片到此处</p>
-            <p class="dropzone-hint" data-i18n="dropzone-hint">或点击选择文件 · 支持 JPG / PNG / WebP / AVIF</p>
+            <p class="dropzone-hint" data-i18n="dropzone-hint">或点击选择文件 · 支持 JPG / PNG / WebP</p>
           </div>
         </div>
 
@@ -696,6 +696,12 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
             </div>
             <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">重试全部失败</button>
           </div>
+        </div>
+
+        <!-- Conversion progress（P0-19：此前对应 DOM 缺失，进度条永不渲染） -->
+        <div id="progress-bar-container" class="progress-bar-container" hidden>
+          <div class="progress-bar"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
+          <span id="progress-text" class="progress-text"></span>
         </div>
 
         <!-- Convert button -->
