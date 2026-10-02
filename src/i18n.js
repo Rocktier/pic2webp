@@ -671,7 +671,7 @@ export function t(key, params = {}) {
   const langDict = dict[currentLang] || dict.en;
   let str = langDict[key] || dict.en[key] || dict.zh[key] || key;
   for (const [k, v] of Object.entries(params)) {
-    str = str.replace(`{${k}}`, v);
+    str = str.replace(new RegExp(`\\{${k}\\}`, "g"), v);
   }
   return str;
 }
