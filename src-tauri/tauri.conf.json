@@ -45,8 +45,21 @@
     ],
     "windows": {
       "allowDowngrades": true,
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
       "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ],
         "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "E2EBA4BE-6F20-5075-84E1-761DE1425F68"
       }
     }
   }
