@@ -947,63 +947,59 @@ function updateLangToggle() {
   langToggle.value = lang;
 }
 
-// ── Dark mode with system theme follow ──
+// ── 主题：auto → light → dark 三态循环（家族 §6.5 唯一状态机）────────
+// 存储键沿用既有的 "rocktier.theme"：无值 = auto（跟随系统），light/dark 显式。
+// 改键会让老用户的主题偏好丢失，所以这里只扩值域、不换键。
+const THEME_KEY = "rocktier.theme";
+const THEME_CYCLE = ["auto", "light", "dark"];
 if (themeToggle) {
-  const savedTheme = localStorage.getItem("rocktier.theme");
-  const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
-  
-  function applyTheme(useDark) {
-    const mode = useDark ? "mode-dark" : "mode-light";
-    if (useDark) {
-      // Dark is the family default — no attribute means dark.
-      document.documentElement.removeAttribute("data-theme");
-    } else {
-      document.documentElement.setAttribute("data-theme", "light");
-    }
-    themeToggle.className = `theme-toggle ${mode}`;
-    themeToggle.title = useDark ? "Dark mode" : "Light mode";
+  const lightMq = window.matchMedia("(prefers-color-scheme: light)");
+
+  function systemTheme() {
+    return lightMq.matches ? "light" : "dark";
   }
 
-  function applySystemTheme() {
-    applyTheme(darkModeMedia.matches);
-    themeToggle.className = "theme-toggle mode-auto";
-    themeToggle.title = "Following system";
+  /** auto 落成实际生效值 —— data-theme 只接受 light/dark。 */
+  function resolveTheme(mode) {
+    return mode === "auto" ? systemTheme() : mode;
   }
-  
-  if (savedTheme === "dark") {
-    applyTheme(true);
-    themeToggle.title = "Dark mode";
-  } else if (savedTheme === "light") {
-    applyTheme(false);
-    themeToggle.title = "Light mode";
-  } else {
-    // No saved preference, follow system
-    applySystemTheme();
+
+  function readMode() {
+    const saved = localStorage.getItem(THEME_KEY);
+    return saved === "light" || saved === "dark" ? saved : "auto";
   }
-  
-  darkModeMedia.addEventListener("change", () => {
-    if (!localStorage.getItem("rocktier.theme")) {
-      applySystemTheme();
-    }
+
+  function syncButton(mode) {
+    themeToggle.dataset.mode = mode;
+    const label = t(`theme-mode-${mode}`);
+    themeToggle.title = `${t("themeBtn")} · ${label}`;
+    themeToggle.setAttribute("aria-label", `${t("themeBtn")}: ${label}`);
+  }
+
+  function applyTheme(mode) {
+    document.documentElement.setAttribute("data-theme", resolveTheme(mode));
+    syncButton(mode);
+  }
+
+  applyTheme(readMode());
+
+  // auto 态下系统外观变了要跟着变；light/dark 是用户明确选择，不动。
+  lightMq.addEventListener("change", () => {
+    if (readMode() === "auto") applyTheme("auto");
   });
-  
+
   themeToggle.addEventListener("click", () => {
-    const saved = localStorage.getItem("rocktier.theme");
-
-    if (saved === "dark") {
-      // dark → light
-      applyTheme(false);
-      localStorage.setItem("rocktier.theme", "light");
-    } else if (saved === "light") {
-      // light → auto (system follow)
-      localStorage.removeItem("rocktier.theme");
-      applySystemTheme();
-    } else {
-      // auto → dark
-      applyTheme(true);
-      localStorage.setItem("rocktier.theme", "dark");
+    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(readMode()) + 1) % THEME_CYCLE.length];
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (e) {
+      // 隐私模式：本次会话仍然生效
     }
+    applyTheme(next);
   });
+
+  // 语言切换后重算 title / aria-label
+  window.addEventListener("lang-changed", () => syncButton(readMode()));
 }
 
 // ── Target size toggle ──
