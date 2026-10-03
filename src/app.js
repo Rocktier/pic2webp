@@ -1039,6 +1039,8 @@ const menuActions = {
   clear: () => clearBtn.click(),
   theme: () => themeToggle.click(),
   website: () => openUrl("https://rocktier.com/pic2webp.html").catch(() => {}),
+  // 此前菜单项被创建但 menuActions 无分支 → 点了完全无反应（家族审查发现）。
+  feedback: () => openUrl("mailto:hello@rocktier.com?subject=Rocktier%20Pic2WebP%20Feedback").catch(() => {}),
 };
 
 if (isTauri()) {

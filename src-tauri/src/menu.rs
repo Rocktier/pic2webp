@@ -1,7 +1,7 @@
 //! 家族标准应用菜单（见《Rocktier家族软件通用准则》菜单一章）。
 //! 自定义项点击经 `on_menu_event` 转成 `menu-action` 事件发给前端。
 
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 
 pub const WEBSITE: &str = "https://rocktier.com/pic2webp.html";
 
@@ -49,7 +49,19 @@ pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         "Rocktier Pic2WebP",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some(l(tr8!("About Rocktier Pic2WebP", "关于 Rocktier Pic2WebP", "Rocktier Pic2WebP について", "Rocktier Pic2WebP 정보", "Über Rocktier Pic2WebP", "Acerca de Rocktier Pic2WebP", "Sobre o Rocktier Pic2WebP", "حول Rocktier Pic2WebP"))), None)?,
+            // 第三个参数不能是 None：Windows 后端只有匹配
+            // `PredefinedMenuItemType::About(Some(metadata))` 才调 show_about_dialog，
+            // None 落入 `_ => {}` —— 菜单项在，点击**完全无反应**。
+            // macOS 走 NSAboutPanel（忽略 metadata），此坑只在 Windows 暴露。
+            &PredefinedMenuItem::about(
+                app,
+                Some(l(tr8!("About Rocktier Pic2WebP", "关于 Rocktier Pic2WebP", "Rocktier Pic2WebP について", "Rocktier Pic2WebP 정보", "Über Rocktier Pic2WebP", "Acerca de Rocktier Pic2WebP", "Sobre o Rocktier Pic2WebP", "حول Rocktier Pic2WebP"))),
+                Some(AboutMetadata {
+                    version: Some(env!("CARGO_PKG_VERSION").to_string()),
+                    copyright: Some("Copyright 2026 Rocktier".to_string()),
+                    ..Default::default()
+                }),
+            )?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::hide(app, None)?,
             &PredefinedMenuItem::hide_others(app, None)?,
