@@ -324,7 +324,7 @@ fn encode_target_size(img: &image::DynamicImage, target_kb: u32, lossless: bool)
 // ─── File collection helper ──────────────────────────────────────────
 
 fn collect_convert_files(request: &ConvertRequest) -> Vec<String> {
-    let supported = ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp", "tiff"];
+    let supported = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
     let mut files = Vec::new();
     for file in &request.files {
         let path = Path::new(file);
@@ -358,6 +358,7 @@ fn convert_single_file(
     src_path: &str,
     request: &ConvertRequest,
     stats: &mut ConvertResult,
+    used_outputs: &mut std::collections::HashSet<String>,
     app_handle: &AppHandle,
     cancel_flag: &Arc<AtomicBool>,
     ffmpeg: &Option<String>,
@@ -377,7 +378,7 @@ fn convert_single_file(
         if let Some(ff) = ffmpeg {
             emit_progress(app_handle, src_path, "converting", "converting", 0, 0);
             let out_name = build_output_name(stem, "webp", &request.naming_mode, quality);
-            let out_path = build_output_path(&out_name, request, parent, src_path);
+            let out_path = dedup_output_path(build_output_path(&out_name, request, parent, src_path), used_outputs);
             let out_str = out_path.to_string_lossy().to_string();
 
             let original_size = std::fs::metadata(src_path).map(|m| m.len() as i64).unwrap_or(0);
@@ -421,7 +422,7 @@ fn convert_single_file(
     // ── Build output filename & path ──
     let out_ext = "webp";
     let filename = build_output_name(stem, out_ext, &request.naming_mode, quality);
-    let output_path = build_output_path(&filename, request, parent, src_path);
+    let output_path = dedup_output_path(build_output_path(&filename, request, parent, src_path), used_outputs);
     let output_str = output_path.to_string_lossy().to_string();
 
     let work_path = Path::new(src_path).to_path_buf();
@@ -440,7 +441,7 @@ fn convert_single_file(
         return;
     }
 
-    // ── Decode ──    // ── Decode ──
+    // ── Decode ──
     emit_progress(app_handle, src_path, "converting", "converting", 0, 0);
 
     let file_size = std::fs::metadata(src_path).map(|m| m.len()).unwrap_or(0);
@@ -473,9 +474,22 @@ fn convert_single_file(
             return;
         }
     };
-    // EXIF 方向：image 不会自动应用，必须手动，否则 iPhone 竖拍导出后全部横躺（P0-21）
-    let orientation = reader.orientation().unwrap_or(image::imageops::Orientation::Normal);
-    let mut img = match reader.decode().map_err(|e| format!("decode_fail:{}", e)) {
+    // EXIF 方向：image 不会自动应用，必须手动，否则 iPhone 竖拍导出后全部横躺（P0-21）。
+    // 注意：image 0.25.5 的 ImageReader 没有 orientation() 方法（该方法 0.25.6+ 才有，
+    // 53a0086 引入的写法从未编译通过）。此处经由 into_decoder() 的 ImageDecoder trait
+    // 方法读取（无 EXIF 的格式返回默认 NoTransforms），再用 apply_orientation 校正。
+    let mut decoder = match reader.into_decoder().map_err(|e| format!("decode_fail:{}", e)) {
+        Ok(d) => d,
+        Err(e) => {
+            stats.fail_count += 1;
+            emit_progress(app_handle, src_path, "failed", &e, 0, 0);
+            let _ = app_handle.emit("convert-stats", stats.clone());
+            return;
+        }
+    };
+    let orientation = image::ImageDecoder::orientation(&mut decoder)
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let mut img = match image::DynamicImage::from_decoder(decoder).map_err(|e| format!("decode_fail:{}", e)) {
         Ok(img) => img,
         Err(e) => {
             stats.fail_count += 1;
@@ -507,7 +521,9 @@ fn convert_single_file(
     // 目标大小模式会编码多个候选，耗时同样集中在这里；写盘前再让取消一次。
     if cancel_flag.load(Ordering::Relaxed) { return; }
     let new_size = webp_mem.len() as i64;
-    if new_size >= original_size && original_size > 0 && request.target_size_kb.is_none() {
+    // 产出比原图大（无论常规还是目标大小模式——后者最容易「达标即变大」）
+    // 都没有写盘的意义：跳过并计入 skipped，不再谎报成功。
+    if new_size >= original_size && original_size > 0 {
         stats.skip_count += 1;
         stats.total_original += original_size;
         stats.total_converted += original_size;
@@ -616,9 +632,12 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
         // true：转换按钮失效、关窗被拦，只能杀进程。catch_unwind 把 panic 降级为一次失败
         // 上报，下面的收尾必定执行；panic hook 会在控制台留下原因。
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // 同批输出路径去重：a.jpg / a.png 这类同名不同扩展会解析出同一输出
+            // 路径，后写者静默盖掉先写者而双双报成功——先到先得，后续加序号。
+            let mut used_outputs: std::collections::HashSet<String> = std::collections::HashSet::new();
             for src_path in all_files.iter() {
                 if cancel_flag.load(Ordering::Relaxed) { break; }
-                convert_single_file(src_path, &request, &mut stats, &app_handle,
+                convert_single_file(src_path, &request, &mut stats, &mut used_outputs, &app_handle,
                     &cancel_flag, &ffmpeg, quality);
             }
 
@@ -670,6 +689,23 @@ fn build_output_name(stem: &str, ext: &str, naming_mode: &str, quality: i32) -> 
         }
         _ => format!("{}.{}", stem, ext),
     }
+}
+
+/// 同批输出去重：同批内撞名时追加 -2/-3 序号（跨批覆盖属命名模式的既有语义，不动）。
+fn dedup_output_path(path: PathBuf, used: &mut std::collections::HashSet<String>) -> PathBuf {
+    if used.insert(path.to_string_lossy().to_string()) {
+        return path;
+    }
+    let dir = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("output").to_string();
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("webp").to_string();
+    for n in 2..1000 {
+        let cand = dir.join(format!("{}-{}.{}", stem, n, ext));
+        if used.insert(cand.to_string_lossy().to_string()) {
+            return cand;
+        }
+    }
+    path
 }
 
 fn build_output_path(filename: &str, request: &ConvertRequest, parent: &Path, src_path: &str) -> PathBuf {
@@ -890,7 +926,7 @@ pub fn run_cli(args: &[String]) {
     }
     
     // Collect all files
-    let supported = ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp", "tiff"];
+    let supported = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
     let mut all_files: Vec<String> = Vec::new();
     for f in &files {
         let path = Path::new(f);

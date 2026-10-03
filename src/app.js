@@ -229,6 +229,32 @@ async function fetchFileSizes() {
 
 // ─── Render file list ───────────────────────────────────────────────
 
+// ─── 缩略图加载：并发上限 4 + 缓存去重 ───────────────────────────
+const THUMB_MAX = 4;
+const thumbCache = new Map();
+const thumbInFlight = new Set();
+let thumbActive = 0;
+const thumbWaiting = [];
+
+function loadThumbnail(path, onDone, onFail) {
+  if (thumbInFlight.has(path)) return;
+  thumbInFlight.add(path);
+  const run = () => {
+    thumbActive++;
+    invoke("generate_thumbnail", { path, size: 48 })
+      .then((dataUrl) => { thumbCache.set(path, dataUrl); onDone(dataUrl); })
+      .catch((e) => { console.warn("Thumbnail failed for", path, e); if (onFail) onFail(); })
+      .finally(() => {
+        thumbInFlight.delete(path);
+        thumbActive--;
+        const next = thumbWaiting.shift();
+        if (next) next();
+      });
+  };
+  if (thumbActive < THUMB_MAX) run();
+  else thumbWaiting.push(run);
+}
+
 function renderFiles() {
   fileList.innerHTML = "";
 
@@ -259,16 +285,14 @@ function renderFiles() {
     const thumbColors = { jpg: '#f59e0b', jpeg: '#f59e0b', png: '#3b82f6', webp: '#10b981' };
     const thumbColor = thumbColors[ext] || '#999';
     const thumbSrc = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="4" fill="' + thumbColor + '"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="11" font-weight="600">' + ext.toUpperCase() + '</text></svg>')}`;
-    // Async load real thumbnail
+    // Async load real thumbnail（并发上限 + 缓存去重：一次拖入几百张不再瞬时 N 个 invoke）
     if (isTauri()) {
-      invoke("generate_thumbnail", { path: f.path, size: 48 }).then((dataUrl) => {
-        const imgEl = item.querySelector(".file-thumb");
-        if (imgEl) imgEl.src = dataUrl;
-      }).catch((e) => {
-        const imgEl = item.querySelector(".file-thumb");
-        if (imgEl) imgEl.style.opacity = "0.3";
-        console.warn("Thumbnail failed for", f.path, e);
-      });
+      const cached = thumbCache.get(f.path);
+      const thumbEl = () => item.querySelector(".file-thumb");
+      if (cached) { const el = thumbEl(); if (el) el.src = cached; }
+      else loadThumbnail(f.path,
+        (dataUrl) => { const el = thumbEl(); if (el) el.src = dataUrl; },
+        () => { const el = thumbEl(); if (el) el.style.opacity = "0.3"; });
     }
 
     const retryBtn = f.status === "failed"
@@ -704,6 +728,14 @@ dropzone.addEventListener("drop", async (e) => {
       .map((f) => f.path)
       .filter(Boolean);
     if (paths.length > 0) await addFiles(paths);
+  }
+});
+
+// 键盘可达：Tab 聚焦拖放区后 Enter/Space 打开文件选择器（原为纯 div，键盘用户无法添加文件）
+dropzone.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+    e.preventDefault();
+    dropzone.click();
   }
 });
 

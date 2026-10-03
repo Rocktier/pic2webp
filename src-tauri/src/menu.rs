@@ -46,10 +46,10 @@ pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
 
     let app_menu = Submenu::with_items(
         app,
-        "Pic2WebP",
+        "Rocktier Pic2WebP",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some(l(tr8!("About Pic2WebP", "关于 Pic2WebP", "Pic2WebP について", "Pic2WebP 정보", "Über Pic2WebP", "Acerca de Pic2WebP", "Sobre o Pic2WebP", "حول Pic2WebP"))), None)?,
+            &PredefinedMenuItem::about(app, Some(l(tr8!("About Rocktier Pic2WebP", "关于 Rocktier Pic2WebP", "Rocktier Pic2WebP について", "Rocktier Pic2WebP 정보", "Über Rocktier Pic2WebP", "Acerca de Rocktier Pic2WebP", "Sobre o Rocktier Pic2WebP", "حول Rocktier Pic2WebP"))), None)?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::hide(app, None)?,
             &PredefinedMenuItem::hide_others(app, None)?,

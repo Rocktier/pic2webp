@@ -3,11 +3,7 @@
 const LANGUAGES = [
   { code: "en", label: "English" },
   { code: "zh", label: "中文" },
-  { code: "ja", label: "日本語"   failed: "失败",
-  source: "来源",
-  image: "图片",
-  format: "格式",
-},
+  { code: "ja", label: "日本語" },
   { code: "ko", label: "한국어" },
   { code: "de", label: "Deutsch" },
   { code: "es", label: "Español" },
@@ -699,6 +695,9 @@ export function applyLang() {
   document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
     el.placeholder = t(el.getAttribute("data-i18n-placeholder"));
   });
+  document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+    el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria")));
+  });
   window.dispatchEvent(new CustomEvent("lang-changed", { detail: currentLang }));
 }
 
@@ -717,7 +716,6 @@ export function translateBackendMessage(message) {
     { regex: /^too_large:(.+)$/, key: "msg-too-large", extract: (m) => ({ e: m[1] }) },
     { regex: /^gif_convert_fail$/, key: "msg-gif-fail" },
     { regex: /^format_fail:(.+)$/, key: "msg-format-fail", extract: (m) => ({ e: m[1] }) },
-    { regex: /^avif_fail:(.+)$/, key: "msg-avif-fail", extract: (m) => ({ e: m[1] }) },
     { regex: /^target_unreachable:(\d+)kb$/, key: "msg-target-unreachable", extract: (m) => ({ n: m[1] }) },
   ];
   for (const p of patterns) {
