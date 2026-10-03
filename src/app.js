@@ -3,6 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { initLang, getLang, setLang, t, translateBackendMessage, getLanguages } from "./i18n.js";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+  initLicense, openLicenseDialog, isLicenseDialogOpen, isLicenseExpiredError,
+} from "./license.js";
 
 // ─── State ──────────────────────────────────────────────────────────
 
@@ -622,6 +625,9 @@ async function startConvert() {
     renderFiles();
     isConverting = false;
     updateConvertBtn();
+    // 试用过期被拦：弹激活对话框（不是裸错误）。Rust 同时会 emit license-expired，
+    // 这里按错误码再判一次作双保险；openLicenseDialog 重复打开只会刷新内容。
+    if (isLicenseExpiredError(e)) { openLicenseDialog(); return; }
     alert(t("convert-failed") + ": " + e);
   }
 }
@@ -676,6 +682,7 @@ async function retrySingleFile(path) {
     console.warn("Retry failed:", e);
     isConverting = false;
     updateConvertBtn();
+    if (isLicenseExpiredError(e)) { openLicenseDialog(); return; }
     alert(t("convert-failed") + ": " + e);
   }
 }
@@ -706,6 +713,7 @@ async function retryAllFailed() {
     console.warn("Retry all failed:", e);
     isConverting = false;
     updateConvertBtn();
+    if (isLicenseExpiredError(e)) openLicenseDialog();
   }
 }
 
@@ -842,6 +850,8 @@ if (retryAllBtn) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
+  // 激活对话框打开时不触发全局转换快捷键（输入框自身的 Enter 走激活流程）
+  if (isLicenseDialogOpen()) return;
   const tag = e.target.tagName;
   // 排除表单元素与按钮：按钮自带 Enter 激活，全局再触发一次会双重开始转换
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
@@ -1072,6 +1082,9 @@ async function init() {
   if (!isTauri()) return;
 
   await setupListeners();
+
+  // 授权（家族 L6）：启动拉状态更新胶囊；订阅 license-expired 开激活对话框
+  initLicense();
 
   await listen("convert-total", (event) => {
     totalTasks = Number(event.payload) || 0;
