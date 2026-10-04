@@ -603,11 +603,65 @@ fn convert_single_file(
             return;
         }
     };
+
+    // 扩展名与实际内容不符 —— 真实世界极常见（微信 / 网页「另存为」、各类导出
+    // 工具都会产生），典型症状是「名为 .jpg 实为 PNG」，老版本按扩展名选解码器时
+    // 会报 `Illegal start bytes:8950` 这种**用户完全看不懂**的十六进制错误。
+    // 这里先把嗅探到的格式留档：万一后续解码仍失败（嗅探与解码器行为不一致、或
+    // 文件损坏），用它给出一条**可操作**的提示而不是裸错误串。
+    let sniffed_format = reader.format();
+
+    /// 把扩展名映射到 image 的格式枚举，供 mismatch 文案使用。
+    fn format_from_ext(ext: &str) -> Option<image::ImageFormat> {
+        match ext.to_ascii_lowercase().as_str() {
+            "jpg" | "jpeg" => Some(image::ImageFormat::Jpeg),
+            "png" => Some(image::ImageFormat::Png),
+            "webp" => Some(image::ImageFormat::WebP),
+            "gif" => Some(image::ImageFormat::Gif),
+            "bmp" => Some(image::ImageFormat::Bmp),
+            "tif" | "tiff" => Some(image::ImageFormat::Tiff),
+            _ => None,
+        }
+    }
+    /// 格式枚举 → 稳定的短名（不用 Debug 的 `Jpeg`/`Png`，与前端词表对齐）。
+    fn format_slug(f: image::ImageFormat) -> &'static str {
+        match f {
+            image::ImageFormat::Jpeg => "jpeg",
+            image::ImageFormat::Png => "png",
+            image::ImageFormat::WebP => "webp",
+            image::ImageFormat::Gif => "gif",
+            image::ImageFormat::Bmp => "bmp",
+            image::ImageFormat::Tiff => "tiff",
+            _ => "unknown",
+        }
+    }
+
+    // 解码失败时决定用哪条文案：扩展名与内容不符时给可操作提示，否则给原始错误。
+    let decode_error = |e: String| -> String {
+        let ext = work_path
+            .extension()
+            .and_then(|x| x.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        // 嗅探优先；嗅探为 None 时退回按扩展名判断（文件可能连头都读不出来）
+        let actual = sniffed_format.or_else(|| format_from_ext(&ext));
+        match actual {
+            Some(f) if format_from_ext(&ext).is_some_and(|x| x != f) => {
+                // 扩展名说 A、内容是 B —— 用户改个扩展名就能用，必须说清楚
+                format!(
+                    "ext_mismatch:{}:{}",
+                    format_slug(f),
+                    ext
+                )
+            }
+            _ => format!("decode_fail:{e}"),
+        }
+    };
     // EXIF 方向：image 不会自动应用，必须手动，否则 iPhone 竖拍导出后全部横躺（P0-21）。
     // 注意：image 0.25.5 的 ImageReader 没有 orientation() 方法（该方法 0.25.6+ 才有，
     // 53a0086 引入的写法从未编译通过）。此处经由 into_decoder() 的 ImageDecoder trait
     // 方法读取（无 EXIF 的格式返回默认 NoTransforms），再用 apply_orientation 校正。
-    let mut decoder = match reader.into_decoder().map_err(|e| format!("decode_fail:{}", e)) {
+    let mut decoder = match reader.into_decoder().map_err(|e| decode_error(e.to_string())) {
         Ok(d) => d,
         Err(e) => {
             stats.fail_count += 1;
@@ -618,7 +672,7 @@ fn convert_single_file(
     };
     let orientation = image::ImageDecoder::orientation(&mut decoder)
         .unwrap_or(image::metadata::Orientation::NoTransforms);
-    let mut img = match image::DynamicImage::from_decoder(decoder).map_err(|e| format!("decode_fail:{}", e)) {
+    let mut img = match image::DynamicImage::from_decoder(decoder).map_err(|e| decode_error(e.to_string())) {
         Ok(img) => img,
         Err(e) => {
             stats.fail_count += 1;
