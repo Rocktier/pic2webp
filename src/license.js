@@ -10,7 +10,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { t } from "./i18n.js";
 
 // 产品页：购买与试用说明的唯一入口（与应用内 menuActions.website 同源）。
-const BUY_URL = "https://rocktier.com/pic2webp.html";
+const BUY_URL = "https://rocktier.com/pic2webp";
 
 // 最近一次 license_status 的结果（LicenseInfo，见 lib.rs）。
 let info = null;
