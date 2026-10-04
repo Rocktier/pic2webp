@@ -628,7 +628,7 @@ async function startConvert() {
     // 试用过期被拦：弹激活对话框（不是裸错误）。Rust 同时会 emit license-expired，
     // 这里按错误码再判一次作双保险；openLicenseDialog 重复打开只会刷新内容。
     if (isLicenseExpiredError(e)) { openLicenseDialog(); return; }
-    alert(t("convert-failed") + ": " + e);
+    alert(t("convert-failed") + ": " + translateBackendMessage(String(e)));
   }
 }
 
@@ -683,7 +683,7 @@ async function retrySingleFile(path) {
     isConverting = false;
     updateConvertBtn();
     if (isLicenseExpiredError(e)) { openLicenseDialog(); return; }
-    alert(t("convert-failed") + ": " + e);
+    alert(t("convert-failed") + ": " + translateBackendMessage(String(e)));
   }
 }
 
@@ -809,7 +809,10 @@ namingPills.querySelectorAll(".pill-btn").forEach((btn) => {
 });
 
 // Output dir —— 记住上次选择（localStorage），不必每次开应用重选
-const OUTPUT_DIR_KEY = "pic2webp-output-dir";
+/* 2026-10-04 键改名：此前是 "pic2webp-output-dir"，压根不在家族命名空间里。
+ * 读取处回落旧键，否则老用户升级后要重选一次输出目录。旧键不删。 */
+const OUTPUT_DIR_KEY = "rocktier.output-dir";
+const OUTPUT_DIR_KEY_LEGACY = "pic2webp-output-dir";
 
 function applyOutputDir(dir) {
   selectedDir = dir || null;
@@ -1064,7 +1067,7 @@ async function init() {
   if (isTauri()) invoke("build_menu", { lang: getLang() }).catch(() => {});
 
   // 恢复上次的输出目录（目录后来被删掉也没关系：后端 create_dir_all 会建回来）
-  applyOutputDir(localStorage.getItem(OUTPUT_DIR_KEY));
+  applyOutputDir(localStorage.getItem(OUTPUT_DIR_KEY) ?? localStorage.getItem(OUTPUT_DIR_KEY_LEGACY));
 
   // First render so the empty-state guide toggle gets its click listener bound
   renderFiles();

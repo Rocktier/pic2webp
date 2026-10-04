@@ -61,6 +61,7 @@ const dict = {
     "overwrite-warn": "⚠️ Existing .webp files will be overwritten, cannot be undone",
     "retry": "Retry",
     "msg-converting": "Converting to WebP...",
+    "msg-already-converting": "Already converting. Wait for the current batch to finish.",
     "msg-saved": "Saved {n} KB",
     "msg-skipped": "WebP not smaller, skipped",
     "msg-write-fail": "Write failed: {e}",
@@ -166,6 +167,7 @@ const dict = {
     "overwrite-warn": "⚠️ 同名 .webp 文件将被直接覆盖，不可恢复",
     "retry": "重试",
     "msg-converting": "转换为 WebP...",
+    "msg-already-converting": "正在转换中。请等当前这批处理完。",
     "msg-saved": "已保存 {n} KB",
     "msg-skipped": "WebP 未更小，已跳过",
     "msg-write-fail": "写入失败: {e}",
@@ -220,10 +222,18 @@ const dict = {
     "license.offline": "连不上 rocktier.com。激活需要一次联网，之后便不再联网。",
     "license.whereToFind": "付款后页面上会显示激活码，购买确认邮件里也有一份。",
     "license.privacyNote": "激活会把激活码发送到 rocktier.com 一次，并把签名回执保存在本机。除此之外不传输任何内容。",
-    failed: "失败",
-  source: "来源",
-  image: "图片",
-  format: "格式",
+    /* 2026-10-04 清掉 4 个死键。
+     *
+     * `failed` 在 zh 块内、其余 7 个语种都没有；`source`/`image`/`format` 的缩进是
+     * 2 空格 —— 与 `zh:`/`ja:` 同级，也就是**漂在所有语言块之外**。
+     * t() 的兜底链是 `langDict[key] || dict.en[key] || dict.zh[key] || key`，
+     * 所以漂在外面的键取不到任何翻译，会把**键名本身**当文案显示出来。
+     *
+     * 而这 4 个键一次都没被引用过（t("failed") / t("source") / … 全为 0 处），
+     * 属于纯粹的字典垃圾 —— 与其补齐 8 份翻译，不如直接删。
+     * 顺带说明：family-check 的 i18n 对账此前 8 年如一日报「适配表未取到键」，
+     * 从没真正比对过，所以这几个错位一直没被发现（见 tools/family-check.mjs
+     * blockKeysFor 的转义陷阱注释）。 */
 },
 
   ja: {
@@ -275,6 +285,7 @@ const dict = {
     "overwrite-warn": "⚠️ 既存の.webpファイルは上書きされ、元に戻せません",
     "retry": "リトライ",
     "msg-converting": "WebPに変換中...",
+    "msg-already-converting": "すでに変換中です。この処理が終わるまでお待ちください。",
     "msg-saved": "{n} KB 保存",
     "msg-skipped": "WebPの方が小さくないためスキップ",
     "msg-write-fail": "書き込み失敗: {e}",
@@ -380,6 +391,7 @@ const dict = {
     "overwrite-warn": "⚠️ 기존 .webp 파일이 덮어쓰기되며 되돌릴 수 없습니다",
     "retry": "재시도",
     "msg-converting": "WebP로 변환 중...",
+    "msg-already-converting": "이미 변환 중입니다. 현재 작업을 마칠 때까지 기다려 주세요.",
     "msg-saved": "{n} KB 절약",
     "msg-skipped": "WebP가 더 작지 않아 건너뜀",
     "msg-write-fail": "쓰기 실패: {e}",
@@ -485,6 +497,7 @@ const dict = {
     "overwrite-warn": "⚠️ Vorhandene .webp-Dateien werden überschrieben, nicht rückgängig machbar",
     "retry": "Wiederholen",
     "msg-converting": "Konvertiere zu WebP...",
+    "msg-already-converting": "Wird bereits konvertiert. Warten Sie auf den aktuellen Stapel.",
     "msg-saved": "{n} KB gespart",
     "msg-skipped": "WebP nicht kleiner, übersprungen",
     "msg-write-fail": "Schreiben fehlgeschlagen: {e}",
@@ -590,6 +603,7 @@ const dict = {
     "overwrite-warn": "⚠️ Los archivos .webp existentes serán sobrescritos, no se puede deshacer",
     "retry": "Reintentar",
     "msg-converting": "Convirtiendo a WebP...",
+    "msg-already-converting": "Ya se está convirtiendo. Espere a que termine el lote actual.",
     "msg-saved": "{n} KB ahorrados",
     "msg-skipped": "WebP no es más pequeño, saltado",
     "msg-write-fail": "Error de escritura: {e}",
@@ -695,6 +709,7 @@ const dict = {
     "overwrite-warn": "⚠️ Arquivos .webp existentes serão sobrescritos, não pode ser desfeito",
     "retry": "Tentar novamente",
     "msg-converting": "Convertendo para WebP...",
+    "msg-already-converting": "Já está convertendo. Aguarde o lote atual terminar.",
     "msg-saved": "{n} KB economizados",
     "msg-skipped": "WebP não é menor, pulado",
     "msg-write-fail": "Falha ao escrever: {e}",
@@ -800,6 +815,7 @@ const dict = {
     "overwrite-warn": "⚠️ سيتم استبدال ملفات .webp الموجودة، لا يمكن التراجع",
     "retry": "إعادة المحاولة",
     "msg-converting": "جارٍ التحويل إلى WebP...",
+    "msg-already-converting": "جارٍ التحويل بالفعل. انتظر انتهاء الدفعة الحالية.",
     "msg-saved": "تم توفير {n} كيلوبايت",
     "msg-skipped": "WebP ليس أصغر، تم التخطي",
     "msg-write-fail": "فشل الكتابة: {e}",
@@ -945,6 +961,10 @@ export function translateBackendMessage(message) {
     { regex: /^gif_convert_fail$/, key: "msg-gif-fail" },
     { regex: /^format_fail:(.+)$/, key: "msg-format-fail", extract: (m) => ({ e: m[1] }) },
     { regex: /^target_unreachable:(\d+)kb$/, key: "msg-target-unreachable", extract: (m) => ({ n: m[1] }) },
+    // 转换互斥锁被占用（lib.rs convert 入口）。正常点不到 —— 前端按钮已禁用 ——
+    // 属防御路径，但防御路径也要说人话：重复点击时用户看到的是「已在转换」，
+    // 而不是 ERR_ALREADY_CONVERTING 这种内部码。
+    { regex: /^ERR_ALREADY_CONVERTING$/, key: "msg-already-converting" },
   ];
   for (const p of patterns) {
     const m = message.match(p.regex);
