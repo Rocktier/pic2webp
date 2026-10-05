@@ -289,9 +289,13 @@ header {
 .status-pending { color: var(--text-tertiary); background: transparent; }
 .status-compressing { color: var(--accent); background: var(--bg-card); }
 .status-converting { color: var(--accent); background: var(--bg-card); }
-.status-done { color: var(--success); background: var(--bg-card); border-color: rgba(34,178,77,0.35); }
+/* 这两个描边原先写死成**浅色档**的色值字面量（rgba(34,178,77,.35) / rgba(230,69,55,.35)），
+   而上面的文字用的是 var(--success) / var(--danger)。于是深色模式下文字是深色档的绿/红，
+   描边却还是浅色档的绿/红 —— 边框与文字不同色，肉眼看得出错位。
+   改用 color-mix 从令牌派生（家族 toast 已用此法），两个主题自动跟随。 */
+.status-done { color: var(--success); background: var(--bg-card); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
 .status-skipped { color: var(--text-tertiary); background: transparent; border: 1px dashed var(--border-hover); }
-.status-failed { color: var(--danger); background: var(--bg-card); border-color: rgba(230,69,55,0.35); }
+.status-failed { color: var(--danger); background: var(--bg-card); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 
 /* ───────── 右侧控制 ───────── */
 .panel-section { display: flex; flex-direction: column; gap: 2px; }
