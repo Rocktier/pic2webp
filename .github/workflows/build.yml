@@ -95,16 +95,8 @@ jobs:
       # 微软商店包：tauri-windows-bundle 读取 src-tauri/gen/windows/（清单模板 + 自有磁贴）
       - name: Build MSIX for Microsoft Store (Windows)
         if: matrix.platform == 'windows-latest'
-        # ROCKTIER_CHANNEL=store turns off the app's own trial and activation
-        # entirely: the Store sold this copy and the Store knows it. Leaving our
-        # paywall in would pull in Microsoft's third-party-purchase rules (10.8.2)
-        # and its disclosure requirements (10.8.4) for no reason.
-        #
-        # The step above builds msi/nsis with no such variable, so those stay on
-        # the default `direct` channel. rustc records option_env! lookups in its
-        # dep-info, so changing this variable is enough to force a rebuild.
-        env:
-          ROCKTIER_CHANNEL: store
+        # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
+        # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
         run: npm run tauri:windows:build
 
       # ──────────────────────────────────────────────
