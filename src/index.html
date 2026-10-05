@@ -140,6 +140,10 @@ header {
 .brand-mark .brand-letters { fill: #ffffff; font-family: var(--font); }
 .brand-mark .brand-pip { fill: var(--red); }
 .brand-mark .brand-badge { fill: #ffffff; }
+/* 家族红点（2026-10-05）：品牌名右侧呼吸红点，与官网字标句点同位。
+   本文件样式为私有方言（家族 tokens.css 未引入），dotpulse 在此自带一份。 */
+.dot-live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-left:8px;vertical-align:middle;animation:dotpulse 3s var(--ease) infinite}
+@keyframes dotpulse{0%,100%{opacity:1}50%{opacity:.4}}
 .subtitle { font-size: 11px; color: var(--text-tertiary); font-weight: 500; }
 
 .header-controls {
@@ -680,7 +684,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
       <div class="logo">
         <img class="brand-mark" src="/favicon.png" alt="" width="26" height="26" />
         <div class="logo-text">
-          <h1>Rocktier Pic2WebP</h1>
+          <h1>Rocktier Pic2WebP<span class="dot-live" aria-hidden="true"></span></h1>
           <span class="subtitle" data-i18n="subtitle">图片转 WebP · 免费 · 本地处理</span>
         </div>
       </div>
