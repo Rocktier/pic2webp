@@ -133,6 +133,23 @@ jobs:
             Rocktier.Pic2WebP.app.zip
           generate_release_notes: true
 
+      - name: Strip _en-US from MSI filename
+        shell: bash
+        run: |
+          shopt -s nullglob
+          found=0
+          for f in src-tauri/target/release/bundle/msi/*_en-US.msi; do
+            nf="${f%_en-US.msi}.msi"
+            mv "$f" "$nf"
+            echo "  $(basename "$f") -> $(basename "$nf")"
+            found=1
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no *_en-US.msi found - Tauri naming changed, this step needs updating"
+            ls -1 src-tauri/target/release/bundle/msi/ 2>/dev/null || true
+            exit 1
+          fi
+
       - name: Release (Windows)
         if: startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'windows-latest'
         uses: softprops/action-gh-release@v2
