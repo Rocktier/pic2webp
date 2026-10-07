@@ -69,7 +69,7 @@ async function activate(code) {
        指纹只用于设备计数，不含任何硬件序列号原文。 */
     let fingerprint = "";
     try {
-      fingerprint = await invoke("machine_fingerprint");
+      fingerprint = await invoke("report_machine_fingerprint");
     } catch {
       // Rust 命令不可用（极旧版本）不该阻断激活。
     }

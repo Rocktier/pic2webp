@@ -147,7 +147,7 @@ async fn license_status() -> Result<LicenseInfo, String> {
 /// 取不到时返回空串：服务端据此不计数也不拦激活（见
 /// `rocktier.com/api/devices.js` 的模块说明）。
 #[tauri::command]
-pub fn machine_fingerprint() -> String {
+pub fn report_machine_fingerprint() -> String {
     crate::trial::machine_fingerprint()
 }
 
@@ -1273,7 +1273,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_convert, cancel_convert, force_close, get_file_size,
             check_disk_space, is_dir, generate_thumbnail, build_menu,
-            machine_fingerprint,
+            report_machine_fingerprint,
             license_status, store_receipt,
         ])
         .run(tauri::generate_context!())
