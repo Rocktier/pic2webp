@@ -133,11 +133,6 @@ async fn license_status() -> Result<LicenseInfo, String> {
     Ok(license_info())
 }
 
-/// 保存服务端签出的回执并立即验签。
-///
-/// 联网换回执的那一步在**前端**做（`fetch` 到 rocktier.com/api/activate），
-/// 为的是不引入 HTTP 客户端依赖；但**验签与落盘必须在这里** —— 前端拿到的只是一段
-/// 待验的字符串，能证明它有效与否的只有公钥。
 /// 本机指纹，供前端在**激活时**上报给服务端做设备计数。
 ///
 /// 为什么单独开一个命令而不是让前端自己算：指纹要读注册表 / ioreg，
@@ -147,10 +142,15 @@ async fn license_status() -> Result<LicenseInfo, String> {
 /// 取不到时返回空串：服务端据此不计数也不拦激活（见
 /// `rocktier.com/api/devices.js` 的模块说明）。
 #[tauri::command]
-pub fn report_machine_fingerprint() -> String {
+fn report_machine_fingerprint() -> String {
     crate::trial::machine_fingerprint()
 }
 
+/// 保存服务端签出的回执并立即验签。
+///
+/// 联网换回执的那一步在**前端**做（`fetch` 到 rocktier.com/api/activate），
+/// 为的是不引入 HTTP 客户端依赖；但**验签与落盘必须在这里** —— 前端拿到的只是一段
+/// 待验的字符串，能证明它有效与否的只有公钥。
 #[tauri::command]
 async fn store_receipt(signed: String) -> Result<LicenseInfo, String> {
     let dir = LICENSE_DIR
