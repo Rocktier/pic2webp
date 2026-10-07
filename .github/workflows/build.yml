@@ -133,7 +133,12 @@ jobs:
             Rocktier.Pic2WebP.app.zip
           generate_release_notes: true
 
+      # 只在 Windows 上跑。本仓的 build job 是 matrix（macos + windows 合一），
+      # 而 MSI 是 Windows 安装包格式 —— macOS 上永远不存在 *.msi，
+      # 守卫（found=0 即 exit 1）会在 macOS job 里必然触发，把整个构建拖红。
+      # 其余 8 仓都是 build-windows 独立 job，不受这个问题影响。
       - name: Strip _en-US from MSI filename
+        if: matrix.platform == 'windows-latest'
         shell: bash
         run: |
           shopt -s nullglob
