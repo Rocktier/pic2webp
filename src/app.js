@@ -285,9 +285,11 @@ function renderFiles() {
 
     const name = f.path.split(/[/\\]/).pop();
     const ext = name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const thumbColors = { jpg: '#f59e0b', jpeg: '#f59e0b', png: '#3b82f6', webp: '#10b981' };
-    const thumbColor = thumbColors[ext] || '#999';
-    const thumbSrc = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="4" fill="' + thumbColor + '"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="11" font-weight="600">' + ext.toUpperCase() + '</text></svg>')}`;
+    // 占位徽标用中性灰阶层级：扩展名文字本身已标明类型，颜色不承载信息，
+    // 且琥珀/蓝/绿在家族令牌里属于 warning/info/success 语义，容易被误读为状态。
+    const thumbTints = { jpg: 'rgba(120,120,128,0.22)', jpeg: 'rgba(120,120,128,0.22)', png: 'rgba(120,120,128,0.16)', webp: 'rgba(120,120,128,0.10)' };
+    const thumbTint = thumbTints[ext] || 'rgba(120,120,128,0.13)';
+    const thumbSrc = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="4" fill="' + thumbTint + '"/><text x="16" y="22" text-anchor="middle" fill="#8e8e93" font-size="11" font-weight="600">' + ext.toUpperCase() + '</text></svg>')}`;
     // Async load real thumbnail（并发上限 + 缓存去重：一次拖入几百张不再瞬时 N 个 invoke）
     if (isTauri()) {
       const cached = thumbCache.get(f.path);
