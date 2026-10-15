@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <link rel="stylesheet" href="./styles/tokens.css" />
 
@@ -684,12 +684,12 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
         <img class="brand-mark" src="/favicon.png" alt="" width="26" height="26" />
         <div class="logo-text">
           <h1>Rocktier Pic2WebP<span class="dot-live" aria-hidden="true"></span></h1>
-          <span class="subtitle" data-i18n="subtitle">图片转 WebP · 免费 · 本地处理</span>
+          <span class="subtitle" data-i18n="subtitle">Images to WebP · A Rocktier tool</span>
         </div>
       </div>
       <div class="header-controls">
           <button class="license-pill" id="license-pill" hidden></button>
-          <button class="icon-btn" id="theme-toggle" data-mode="auto"
+          <button aria-label="Theme" class="icon-btn" id="theme-toggle" data-mode="auto"
                   data-i18n-aria="themeBtn" title="Theme">
             <svg class="monitor" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8M12 17v3.5"/></svg>
             <svg class="sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
@@ -704,7 +704,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
       <!-- ===== Left: Drop zone + File list ===== -->
       <section class="left-panel">
         <!-- Drop zone -->
-        <div id="dropzone" class="dropzone" role="button" tabindex="0" data-i18n-aria="dropzone-text">
+        <div aria-label="Drop images here" id="dropzone" class="dropzone" role="button" tabindex="0" data-i18n-aria="dropzone-text">
           <div class="dropzone-content">
             <div class="dropzone-icon">
               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -713,20 +713,20 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
                 <line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
             </div>
-            <p class="dropzone-text" data-i18n="dropzone-text">拖拽图片到此处</p>
-            <p class="dropzone-hint" data-i18n="dropzone-hint">或点击选择文件 · 支持 JPG / PNG / WebP</p>
+            <p class="dropzone-text" data-i18n="dropzone-text">Drop images here</p>
+            <p class="dropzone-hint" data-i18n="dropzone-hint">or click to select · JPG / PNG / GIF / BMP / TIFF / WebP</p>
           </div>
         </div>
 
         <!-- File list -->
         <div class="file-list-header">
-          <span><span class="file-count-dot"></span><span id="file-count-text" data-i18n="file-count" data-i18n-params='{"n":0}'>已选择 0 个文件</span></span>
-          <span class="file-list-actions"><button id="folder-btn" class="btn-text" data-i18n="select-folder">选择文件夹</button><button id="clear-btn" class="btn-text" hidden data-i18n="clear">清空</button></span>
+          <span><span class="file-count-dot"></span><span id="file-count-text" data-i18n="file-count" data-i18n-params='{"n":0}'>0 file(s) selected</span></span>
+          <span class="file-list-actions"><button id="folder-btn" class="btn-text" data-i18n="select-folder">Select Folder</button><button id="clear-btn" class="btn-text" hidden data-i18n="clear">Clear</button></span>
         </div>
-        <div class="hint warn" id="folder-hint" hidden data-i18n="folder-hint">检测到文件夹，但未开启递归子目录。勾选「递归子目录」以处理其中的图片。</div>
+        <div class="hint warn" id="folder-hint" hidden data-i18n="folder-hint">Folder detected but subdirectory recursion is off. Enable "Include subdirectories" to process images inside.</div>
         <div id="file-list" class="file-list">
           <div class="empty-state" id="empty-state">
-            <p class="empty-hint" data-i18n="empty-hint">拖入图片即可开始 · 输出 WebP，本地处理不上传</p>
+            <p class="empty-hint" data-i18n="empty-hint">Drop images here to start · WebP output, processed locally</p>
           </div>
         </div>
       </section>
@@ -735,79 +735,79 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
       <section class="right-panel">
         <!-- Quality -->
         <div class="panel-section">
-          <div class="section-label" data-i18n="output-quality">输出质量</div>
+          <div class="section-label" data-i18n="output-quality">Output Quality</div>
           <div class="quality-header">
-            <span class="quality-label" data-i18n="quality">质量</span>
+            <span class="quality-label" data-i18n="quality">Quality</span>
             <span class="quality-value" id="quality-val">80</span>
-            <label class="mini-toggle" style="margin-left:auto"><input type="checkbox" id="chk-lossless" /><span data-i18n="lossless">无损</span></label>
+            <label class="mini-toggle" style="margin-left:auto"><input type="checkbox" id="chk-lossless" /><span data-i18n="lossless">Lossless</span></label>
           </div>
           <div class="pill-group" id="quality-pills">
-            <button class="pill-btn" data-q="60" data-i18n="small-file">小文件</button>
-            <button class="pill-btn active" data-q="80" data-i18n="q-balanced">均衡</button>
-            <button class="pill-btn" data-q="95" data-i18n="high-quality">高质量</button>
+            <button class="pill-btn" data-q="60" data-i18n="small-file">Smaller</button>
+            <button class="pill-btn active" data-q="80" data-i18n="q-balanced">Balanced</button>
+            <button class="pill-btn" data-q="95" data-i18n="high-quality">Better</button>
           </div>
-          <label class="mini-toggle" style="margin-top:4px"><input type="checkbox" id="chk-target-size" /><span data-i18n="target-size">目标大小</span></label>
+          <label class="mini-toggle" style="margin-top:4px"><input type="checkbox" id="chk-target-size" /><span data-i18n="target-size">Target Size</span></label>
           <input type="number" id="target-size-input" class="advanced-row input" style="width:72px;display:none" placeholder="KB" min="10" max="10000" value="200" />
         </div>
 
         <!-- Options -->
         <div class="panel-section">
-          <div class="section-label" data-i18n="convert-options">转换选项</div>
+          <div class="section-label" data-i18n="convert-options">Options</div>
           <label class="toggle-row">
             <input type="checkbox" id="chk-recursive" />
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
-            <span data-i18n="recursive">递归子目录</span>
+            <span data-i18n="recursive">Include subdirectories</span>
           </label>
           <label class="toggle-row">
             <input type="checkbox" id="chk-delete" />
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
-            <span data-i18n="delete-source">转换后删除源文件</span>
+            <span data-i18n="delete-source">Delete source</span>
           </label>
         </div>
 
         <!-- Output directory -->
         <div class="panel-section">
-          <div class="section-label" data-i18n="output-dir">输出目录</div>
+          <div class="section-label" data-i18n="output-dir">Output Directory</div>
           <div class="dir-row">
-            <input type="text" id="output-dir" class="dir-input" readonly placeholder="与源文件同目录" data-i18n-placeholder="same-dir" />
+            <input type="text" id="output-dir" class="dir-input" readonly placeholder="Same as source" data-i18n-placeholder="same-dir" />
             <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
           </div>
           <div class="pill-group" id="dir-pills">
-            <button id="dir-btn" class="pill-btn primary" data-i18n="select">选择</button>
+            <button id="dir-btn" class="pill-btn primary" data-i18n="select">Browse</button>
           </div>
         </div>
 
         <!-- Naming mode — pill buttons -->
         <div class="panel-section">
-          <div class="section-label" data-i18n="naming-rule">命名规则</div>
+          <div class="section-label" data-i18n="naming-rule">Naming</div>
           <div class="pill-group" id="naming-pills">
-            <button class="pill-btn" data-value="overwrite" data-i18n="overwrite">覆盖</button>
+            <button class="pill-btn" data-value="overwrite" data-i18n="overwrite">Overwrite</button>
             <button class="pill-btn active" data-value="webp-suffix">-webp</button>
             <button class="pill-btn" data-value="q-suffix">-q80</button>
-            <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">时间戳</button>
+            <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">Timestamp</button>
           </div>
-          <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ 同名 .webp 文件将被直接覆盖，不可恢复</div>
+          <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ Existing .webp files will be overwritten, cannot be undone</div>
         </div>
 
 
         <!-- Advanced options (collapsible) -->
         <div class="panel-section">
-          <div class="section-label" data-i18n="advanced">高级选项</div>
+          <div class="section-label" data-i18n="advanced">Advanced</div>
           <div class="advanced-section" id="advanced-section">
             <div class="advanced-row">
-              <label class="mini-toggle"><input type="checkbox" id="chk-resize" /><span data-i18n="resize">缩放</span></label>
-              <label data-i18n="resize-width">宽</label>
+              <label class="mini-toggle"><input type="checkbox" id="chk-resize" /><span data-i18n="resize">Resize</span></label>
+              <label data-i18n="resize-width">W</label>
               <input type="number" id="resize-w" placeholder="1920" min="1" max="20000" />
-              <label data-i18n="resize-height">高</label>
+              <label data-i18n="resize-height">H</label>
               <input type="number" id="resize-h" placeholder="auto" min="0" max="20000" />
               <select id="resize-mode">
-                <option value="fit" data-i18n="resize-fit">等比</option>
-                <option value="fill" data-i18n="resize-fill">填充</option>
-                <option value="shrink" data-i18n="resize-shrink">仅缩小</option>
+                <option value="fit" data-i18n="resize-fit">Fit</option>
+                <option value="fill" data-i18n="resize-fill">Fill</option>
+                <option value="shrink" data-i18n="resize-shrink">Shrink only</option>
               </select>
             </div>
             <div class="advanced-row">
-              <label class="mini-toggle"><input type="checkbox" id="chk-structure" /><span data-i18n="preserve-structure">保留目录结构</span></label>
+              <label class="mini-toggle"><input type="checkbox" id="chk-structure" /><span data-i18n="preserve-structure">Preserve folder structure</span></label>
             </div>
           </div>
         </div>
@@ -820,23 +820,23 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
           <div class="stats-row">
             <div class="stat-item">
               <span class="stat-num" id="stat-success">0</span>
-              <span class="stat-lbl" data-i18n="success">成功</span>
+              <span class="stat-lbl" data-i18n="success">Done</span>
             </div>
             <div class="stat-item">
               <span class="stat-num" id="stat-skip">0</span>
-              <span class="stat-lbl" data-i18n="skip">跳过</span>
+              <span class="stat-lbl" data-i18n="skip">Skip</span>
             </div>
             <div class="stat-item">
               <span class="stat-num stat-fail" id="stat-fail">0</span>
-              <span class="stat-lbl" data-i18n="fail">失败</span>
+              <span class="stat-lbl" data-i18n="fail">Failed</span>
             </div>
           </div>
           <div class="stats-row-bottom">
             <div class="stat-saved">
               <span class="stat-saved-val" id="stat-saved">—</span>
-              <span class="stat-saved-lbl" data-i18n="saved">节省</span>
+              <span class="stat-saved-lbl" data-i18n="saved">Saved</span>
             </div>
-            <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">重试全部失败</button>
+            <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">Retry All Failed</button>
           </div>
         </div>
 
@@ -848,7 +848,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
         <!-- Convert button -->
         <button id="convert-btn" class="btn-primary" disabled>
-          <span id="btn-text" data-i18n="start-convert">开始转换</span>
+          <span id="btn-text" data-i18n="start-convert">Convert</span>
           <span id="btn-spinner" class="spinner" hidden></span>
         </button>
       </section>
