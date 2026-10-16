@@ -1232,11 +1232,53 @@ pub fn run_cli(args: &[String]) {
 
 pub mod menu;
 
+/* ── 文件关联（双击 / 「打开方式」）：冷启动两段（tao#1235）──
+   与 MD/Write/Sign/PDF/OCR 同款：Windows/Linux 冷启动路径在 argv（main.rs
+   只把 `--cli` 分走，其余参数原样带到这里），macOS 经 RunEvent::Opened；
+   两者都先镜像到 InitialFile，前端挂载后查 initial_file、热启动听
+   open-file。Opened 可能早于 setup（托管状态还不存在），所以先入
+   PENDING_DOCS 进程级队列、setup 搬运；「查询之后、监听之前」的空窗由
+   on_page_load 补发堵住。 */
+
+/// 冷启动时经文件关联送入的图片路径。
+pub struct InitialFile(Mutex<Option<String>>);
+
+/// 启动期到达的文档队列（tao#1235：冷启动时 `application:openURLs:` 早于
+/// setup/托管状态，`try_state` 拿不到任何东西，必须在进程级静态里排队，
+/// setup 完成后再搬进 `InitialFile`。Chromium 的 `_startupComplete` 同款）。
+static PENDING_DOCS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// 与前端 SUPPORTED_EXTS 及文件选择器一致。
+const SUPPORTED_EXTS: [&str; 7] = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
+
+fn is_supported_path(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    match path.extension().and_then(|e| e.to_str()) {
+        Some(ext) => SUPPORTED_EXTS.contains(&ext.to_ascii_lowercase().as_str()),
+        None => false,
+    }
+}
+
+/// 从命令行参数取第一个受支持的图片（Windows/Linux 双击关联文件即在此）。
+fn file_from_args() -> Option<String> {
+    std::env::args()
+        .skip(1)
+        .find(|a| is_supported_path(Path::new(a)))
+}
+
+/// 前端挂载后拉取冷启动文档。
+#[tauri::command]
+fn initial_file(state: State<InitialFile>) -> Option<String> {
+    state.0.lock().ok().and_then(|s| s.clone())
+}
+
 // ─── App builder ────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .on_menu_event(|app, event| {
             let _ = app.emit("menu-action", event.id().0.clone());
         })
@@ -1256,6 +1298,22 @@ pub fn run() {
                 let _ = LICENSE_DIR.set(dir);
             }
             let _ = APP_HANDLE.set(app.handle().clone());
+            // 双击关联图片冷启动（Windows/Linux）：argv 里的路径先缓冲起来。
+            app.manage(InitialFile(Mutex::new(file_from_args())));
+            // tao#1235：把冷启动队列里的文档搬进托管状态（setup 晚于
+            // application:openURLs:，此刻托管状态与窗口才真正可用）。
+            let queued: Vec<String> = PENDING_DOCS
+                .lock()
+                .expect("PENDING_DOCS poisoned")
+                .drain(..)
+                .collect();
+            if let Some(first) = queued.first() {
+                if let Some(state) = app.try_state::<InitialFile>() {
+                    if let Ok(mut slot) = state.0.lock() {
+                        *slot = Some(first.clone());
+                    }
+                }
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -1271,13 +1329,56 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            initial_file,
             start_convert, cancel_convert, force_close, get_file_size,
             check_disk_space, is_dir, generate_thumbnail, build_menu,
             report_machine_fingerprint,
             license_status, store_receipt,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // 冷启动竞态补发：Opened 事件可能落在「前端查询 initial_file 之后、
+        // 监听器挂载之前」的空窗里。页面加载完成时若仍有待开文档，再补发一次 ——
+        // 前端 addFiles 自带同路径去重，重复送达无副作用。
+        .on_page_load(|window, payload| {
+            if !matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                return;
+            }
+            if let Some(state) = window.app_handle().try_state::<InitialFile>() {
+                if let Ok(slot) = state.0.lock() {
+                    if let Some(path) = slot.as_ref() {
+                        let _ = window.emit("open-file", path.clone());
+                    }
+                }
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app_handle, _event| {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        if let tauri::RunEvent::Opened { urls } = _event {
+            for url in urls {
+                let Ok(path) = url.to_file_path() else { continue };
+                let Ok(path) = path.to_str() else { continue };
+                if !is_supported_path(Path::new(path)) {
+                    continue;
+                }
+                // tao#1235：冷启动时该事件在 setup/托管状态存在之前直达，所以先入
+                // 进程级队列，setup 再搬运。热启动先排空队列：队列只在 setup 里
+                // drain 一次，不排则每打开一个文件就多残留一条（缓慢内存泄漏）。
+                if let Ok(mut q) = PENDING_DOCS.lock() {
+                    q.clear();
+                    q.push(path.to_string());
+                }
+                if let Some(state) = _app_handle.try_state::<InitialFile>() {
+                    if let Ok(mut slot) = state.0.lock() {
+                        *slot = Some(path.to_string());
+                    }
+                }
+                let _ = _app_handle.emit("open-file", path);
+                break;
+            }
+        }
+    });
 }
 
 /// 前端挂载后（及语言切换时）按 UI 语言重建菜单。

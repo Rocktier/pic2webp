@@ -40,6 +40,50 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "fileAssociations": [
+      {
+        "ext": ["jpg", "jpeg"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/jpeg"
+      },
+      {
+        "ext": ["png"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/png"
+      },
+      {
+        "ext": ["webp"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/webp"
+      },
+      {
+        "ext": ["gif"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/gif"
+      },
+      {
+        "ext": ["bmp"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/bmp"
+      },
+      {
+        "ext": ["tiff"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/tiff"
+      }
+    ],
     "resources": [
       "../public/*"
     ],

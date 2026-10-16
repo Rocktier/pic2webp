@@ -1098,6 +1098,17 @@ async function init() {
     const paths = raw.map((p) => (typeof p === "string" ? p : p && p.path)).filter(Boolean);
     if (paths.length > 0) await addFiles(paths);
   });
+
+  // 文件关联（双击 / 「打开方式」）：冷启动路径经 initial_file 拉取，热启动由
+  // Rust 的 open-file 事件送达。addFiles 是拖放/选择框共用的装载入口
+  // （自带同路径去重与扩展名过滤），复用即可。
+  invoke("initial_file").then((p) => {
+    if (p) addFiles([p]);
+  }).catch(() => {});
+  await listen("open-file", (event) => {
+    const p = event.payload;
+    if (p) addFiles([p]);
+  });
 }
 
 init();
