@@ -84,9 +84,10 @@ async function activate(code) {
     }
   } catch (e) {
     // 断网是最常见情形 —— 明说，而不是甩一条 fetch 报错。
-    const msg = e instanceof Error && e.message && !e.message.includes("fetch")
-      ? e.message
-      : "offline";
+    // 注意 WKWebView 把被拦/断网的 fetch 抛成 "Load failed"（不含 "fetch" 字样）：
+    // 只认 "fetch" 会把它当成服务端错误落进 invalid，误导向「码不对」。
+    const raw = e instanceof Error && e.message ? e.message : "";
+    const msg = raw && !/fetch|load failed|network/i.test(raw) ? raw : "offline";
     throw new Error(msg);
   }
   // 验签与落盘在 Rust：前端拿到的只是一段待验的字符串。
@@ -109,6 +110,9 @@ function errorKey(detail) {
   if (detail === "offline") return "license.offline";
   if (detail.includes("WRONG_PRODUCT")) return "license.wrongProduct";
   if (detail.includes("REFUNDED")) return "license.refunded";
+  /* 服务端 403 带 DEVICE_LIMIT 前缀 —— 下一步不是重试，是去网页解绑一台。
+     不接住它就会落进 invalid，让用户白检查一遍码。 */
+  if (detail.includes("DEVICE_LIMIT")) return "license.deviceLimit";
   return "license.invalid";
 }
 

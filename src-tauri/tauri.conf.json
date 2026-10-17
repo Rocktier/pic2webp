@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' asset:; script-src 'self' asset:; style-src 'self' asset: 'unsafe-inline'; img-src 'self' asset: data:"
+      "csp": "default-src 'self' asset:; script-src 'self' asset:; style-src 'self' asset: 'unsafe-inline'; img-src 'self' asset: data:; connect-src 'self' ipc: http://ipc.localhost https://rocktier.com"
     }
   },
   "bundle": {

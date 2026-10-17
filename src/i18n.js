@@ -108,6 +108,7 @@ const dict = {
     "license.wrongProduct": "That code belongs to a different Rocktier app. Each app has its own code — or the family bundle, which unlocks all of them.",
     "license.refunded": "That code was refunded, so it no longer unlocks anything. If this is a mistake, write to hello@rocktier.com with your order number.",
     "license.offline": "Could not reach rocktier.com. Activating needs one connection; after that the app stays offline.",
+    "license.deviceLimit": "This code has reached its device limit. Deactivate a device at rocktier.com/license, then try again.",
     "license.whereToFind": "Your code was shown on the page right after payment, and is in the purchase email too.",
     "license.privacyNote": "Activating sends the code to rocktier.com once and stores the signed reply locally. Nothing else is sent.",
   },
@@ -214,6 +215,7 @@ const dict = {
     "license.wrongProduct": "这个激活码属于另一个 Rocktier 应用。每个应用各有自己的码，或者用全家桶（可解锁全部）。",
     "license.refunded": "这个激活码对应的购买已退款，因此不能再解锁。如属误判，请把订单号发到 hello@rocktier.com。",
     "license.offline": "连不上 rocktier.com。激活需要一次联网，之后便不再联网。",
+    "license.deviceLimit": "这张激活码的设备数已达上限。请先到 rocktier.com/license 解绑一台设备，再重试。",
     "license.whereToFind": "付款后页面上会显示激活码，购买确认邮件里也有一份。",
     "license.privacyNote": "激活会把激活码发送到 rocktier.com 一次，并把签名回执保存在本机。除此之外不传输任何内容。",
     /* 2026-10-04 清掉 4 个死键。
