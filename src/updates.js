@@ -21,6 +21,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import pkg from "../package.json";
 import { t } from "./i18n.js";
+import { revalidateLicence, refreshLicenseStatus, openLicenseDialog } from "./license.js";
 
 const REPO = "Rocktier/pic2webp";
 
@@ -99,6 +100,13 @@ export async function runUpdateCheck() {
     lastCheckedAt = result.checkedAt;
     try { localStorage.setItem(STORE_KEY, String(result.checkedAt)); } catch { /* 隐私模式下忽略 */ }
     state = result.hasUpdate ? "available" : "uptodate";
+    /* 顺带吊销复检：同一次点击、同一承诺（只在点击时联网）。revoked → 清回执，
+       授权状态回到未激活并弹激活对话框。 */
+    const verdict = await revalidateLicence();
+    if (verdict === "revoked") {
+      void refreshLicenseStatus();
+      openLicenseDialog();
+    }
   } catch {
     state = "failed";
   } finally {

@@ -30,6 +30,27 @@ export function isLicenseDialogOpen() {
 }
 
 // 拉取并刷新授权状态，更新头部胶囊。失败不打扰用户（dev/浏览器里没有该命令）。
+/**
+ * 吊销复检：用户点击「检查更新」时顺带向服务端核对一次许可状态。
+ * 只在用户点击时联网（与更新检查同一承诺）；请求只携带回执里本就有的交易号。
+ * revoked 时清除本地回执 —— 授权状态回到未激活，写闸门按状态拦截。
+ */
+export async function revalidateLicence() {
+  if (!isTauri()) return "unknown";
+  try {
+    const info = await invoke("license_status");
+    if (!info || !info.txn) return "unknown";
+    const res = await fetch(`https://rocktier.com/api/revalidate?txn=${encodeURIComponent(info.txn)}`);
+    if (!res.ok) return "unknown";
+    const data = await res.json();
+    if (!data.revoked) return "ok";
+    await invoke("clear_receipt");
+    return "revoked";
+  } catch {
+    return "unknown";
+  }
+}
+
 export async function refreshLicenseStatus() {
   if (!isTauri()) return null;
   try {
