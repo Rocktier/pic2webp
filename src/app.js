@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, ask } from "@tauri-apps/plugin-dialog";
 import { initLang, getLang, setLang, t, translateBackendMessage, getLanguages } from "./i18n.js";
+import { runUpdateCheck } from "./updates.js";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   initLicense, openLicenseDialog, isLicenseDialogOpen, isLicenseExpiredError,
@@ -1042,6 +1043,7 @@ const menuActions = {
   website: () => openUrl("https://rocktier.com/pic2webp.html").catch(() => {}),
   // 此前菜单项被创建但 menuActions 无分支 → 点了完全无反应（家族审查发现）。
   feedback: () => openUrl("mailto:hello@rocktier.com?subject=Rocktier%20Pic2WebP%20Feedback").catch(() => {}),
+  "check-updates": () => runUpdateCheck(),
 };
 
 if (isTauri()) {

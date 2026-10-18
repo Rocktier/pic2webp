@@ -42,6 +42,8 @@ pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    // 检查更新：只 emit "check-updates"，联网由前端 updates.js 做。
+    let update_i = MenuItem::with_id(app, "check-updates", l(tr8!("Check for updates", "检查更新", "アップデートを確認", "업데이트 확인", "Nach Updates suchen", "Buscar actualizaciones", "Verificar atualizações", "التحقق من التحديثات")), true, None::<&str>)?;
     let site_i = MenuItem::with_id(app, "website", l(tr8!("Website", "官方网站", "公式サイト", "공식 사이트", "Webseite", "Sitio web", "Site oficial", "الموقع الرسمي")), true, None::<&str>)?;
 
     let app_menu = Submenu::with_items(
@@ -123,7 +125,7 @@ pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         app,
         l(tr8!("Help", "帮助", "ヘルプ", "도움말", "Hilfe", "Ayuda", "Ajuda", "مساعدة")),
         true,
-        &[&site_i],
+        &[&update_i, &site_i],
     )?;
 
     let menu = Menu::with_items(
