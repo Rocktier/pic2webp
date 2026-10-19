@@ -1,0 +1,38 @@
+name: Checks
+
+# Pic2WebP 此前唯一的 push 工作流是 notify-family-gate：build.yml 只在 tag /
+# 手动触发，push 不跑类型检查、单测与 clippy —— 付费墙（license/trial）的
+# 改动从未过 Rust 质量门（2026-10-19~20 grill-me 找茬 A1，用户第一性原则
+# 拍板修复）。本文件把 MD 仓同配方（纯 Tauri、无 Go engine）的 Tests & Lints
+# 作业挂到 push；配方差异仅：pic2webp 无 npm test 脚本，前端侧只跑 build。
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: Tests & Lints
+    # macOS, not ubuntu: cargo test/clippy compile the Tauri crate, which on Linux
+    # needs glib/gtk/webkit system libraries the bare runner does not have. Here it
+    # compiles against the same platform the shipping build uses.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check + build
+        run: npm run build
+      - name: Rust tests + clippy
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings

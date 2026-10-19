@@ -108,9 +108,14 @@ pub struct LicenseInfo {
 }
 
 /// 回执里的交易号（吊销复检用）。无有效回执时为 None。
+///
+/// 与 `current_license` 同一道 accepts 过滤：别人的回执即使验签通过也不是本应用的
+/// 授权，其交易号不该拿去 revalidate（B3：绕开 store_receipt 落盘的手工放置场景）。
 fn receipt_txn() -> Option<String> {
     let dir = LICENSE_DIR.get()?;
-    crate::license::read_valid_receipt(dir, crate::license::PUBLIC_KEY_B64).map(|r| r.txn)
+    crate::license::read_valid_receipt(dir, crate::license::PUBLIC_KEY_B64)
+        .filter(crate::license::accepts)
+        .map(|r| r.txn)
 }
 
 fn license_info() -> LicenseInfo {
