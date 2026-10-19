@@ -665,6 +665,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   .license-body p { font-size: 12px; color: var(--text-primary); line-height: 1.6; }
   .license-body small { font-size: 11px; color: var(--text-tertiary); line-height: 1.55; display: block; }
   .license-body .license-error { color: var(--danger); }
+  /* 吊销通告（B1）： revoked 标记见 license.js openLicenseDialog 调用点。 */
+  .license-body .license-revoked-notice { border: 1px solid var(--danger); border-radius: 8px; padding: 8px 10px; color: var(--danger); }
+  .license-body .license-revoked-notice small { color: inherit; }
   .license-field { display: flex; flex-direction: column; gap: 5px; }
   .license-field label { font-size: 11px; color: var(--text-secondary); font-weight: 500; }
   .license-field input {

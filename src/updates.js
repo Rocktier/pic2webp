@@ -105,7 +105,7 @@ export async function runUpdateCheck() {
     const verdict = await revalidateLicence();
     if (verdict === "revoked") {
       void refreshLicenseStatus();
-      openLicenseDialog();
+      openLicenseDialog({ revoked: true });
     }
   } catch {
     state = "failed";

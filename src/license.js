@@ -14,6 +14,8 @@ const BUY_URL = "https://rocktier.com/pic2webp";
 
 // 最近一次 license_status 的结果（LicenseInfo，见 lib.rs）。
 let info = null;
+/* B1：吊销通告开关（见 openLicenseDialog / renderDialog）。 */
+let revokedNotice = false;
 // 对话框元素引用（首次打开时构建，之后复用）。
 let els = null;
 
@@ -40,12 +42,26 @@ export async function revalidateLicence() {
   try {
     const info = await invoke("license_status");
     if (!info || !info.txn) return "unknown";
-    const res = await fetch(`https://rocktier.com/api/revalidate?txn=${encodeURIComponent(info.txn)}`);
-    if (!res.ok) return "unknown";
-    const data = await res.json();
-    if (!data.revoked) return "ok";
-    await invoke("clear_receipt");
-    return "revoked";
+    /* B4：吊销复检是「顺手而为」的后台校验（挂在检查更新点击上），网络挂死
+       不该拖住整个更新检查 —— 8s 超时后按 unknown 放行（fail-open：宁可漏
+       一次复检，不可让检查更新卡死）。 */
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch(`https://rocktier.com/api/revalidate?txn=${encodeURIComponent(info.txn)}`, { signal: ctrl.signal });
+      if (!res.ok) return "unknown";
+      const data = await res.json();
+      /* 响应里没有 revoked 字段 = 服务端 API 形状变了。静默 fail-open 会让
+         吊销永久失效且无人知晓，至少留一条线索给排障。 */
+      if (!("revoked" in data)) {
+        console.warn('license: revalidate response has no "revoked" field — API shape changed?');
+      }
+      if (!data.revoked) return "ok";
+      await invoke("clear_receipt");
+      return "revoked";
+    } finally {
+      clearTimeout(timer);
+    }
   } catch {
     return "unknown";
   }
@@ -201,6 +217,17 @@ function renderDialog() {
   body.textContent = "";
   footer.textContent = "";
 
+  /* B1：吊销复检判定 revoked 时置位，顶部显示「许可已被吊销」专属通告 ——
+     回执已清、info 与试用到期无从区分，verdict 是唯一可靠的传递点。 */
+  if (revokedNotice) {
+    const notice = document.createElement("p");
+    notice.className = "license-revoked-notice";
+    const small = document.createElement("small");
+    small.textContent = t("license.revokedNotice");
+    notice.appendChild(small);
+    body.appendChild(notice);
+  }
+
   const status = document.createElement("p");
 
   if (!info) {
@@ -320,7 +347,8 @@ async function submitActivation() {
   }
 }
 
-export function openLicenseDialog() {
+export function openLicenseDialog({ revoked = false } = {}) {
+  revokedNotice = revoked;
   if (!els) buildDialog();
   // 先用现有状态渲染（首次为检查中）
   renderDialog();
@@ -332,6 +360,7 @@ export function openLicenseDialog() {
 }
 
 export function closeLicenseDialog() {
+  revokedNotice = false;
   if (els) els.overlay.hidden = true;
 }
 
