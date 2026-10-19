@@ -28,6 +28,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - name: Ensure clippy component
+        # dtolnay action 的 components: clippy 在部分 macOS runner 镜像上装不到
+        # 活动 toolchain（CAD db7b5fc 曾报 cargo-clippy is not installed for
+        # 1.98.0，而同配方的 pic2webp/MD 同一晚却过了 —— 镜像状态差异）。
+        # 显式对当前 toolchain 补装，幂等，防复发。
+        run: rustup component add clippy
       - name: Install dependencies
         run: npm ci
       - name: Type check + build
