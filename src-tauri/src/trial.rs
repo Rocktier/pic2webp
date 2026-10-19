@@ -307,13 +307,12 @@ fn read_secondary(app_key: &str) -> Option<TrialRecord> {
 /// 写一条记录。失败只记日志不 panic —— 试用状态写不出去时，
 /// 上层按"放行"处理（宁可多给一段试用，不能把人锁在门外）。
 pub fn write_record(path: &Path, rec: &TrialRecord) {
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
-                eprintln!("license: cannot create trial dir {}: {e}", parent.display());
-                return;
-            }
-        }
+    if let Some(parent) = path.parent()
+        && !parent.exists()
+        && let Err(e) = std::fs::create_dir_all(parent)
+    {
+        eprintln!("license: cannot create trial dir {}: {e}", parent.display());
+        return;
     }
     if let Err(e) = std::fs::write(path, rec.serialize()) {
         eprintln!("license: cannot write trial state {}: {e}", path.display());

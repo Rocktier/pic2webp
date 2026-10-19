@@ -283,10 +283,10 @@ fn resolve_tools(app: &AppHandle) -> HashMap<String, Option<String>> {
         search_dirs.push(res_dir.clone());
         search_dirs.push(res_dir.join("tools"));
     }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            search_dirs.push(parent.join("tools"));
-        }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(parent) = exe.parent()
+    {
+        search_dirs.push(parent.join("tools"));
     }
 
     let homebrew_paths = if cfg!(target_os = "macos") {
@@ -369,8 +369,10 @@ fn check_disk_space(path: String) -> Result<u64, String> {
         }
     }
     // is_dir() follows symlinks; a dir is a fine probe point either way.
-    if !probe.is_dir() {
-        if let Some(p) = probe.parent() { probe = p.to_path_buf(); }
+    if !probe.is_dir()
+        && let Some(p) = probe.parent()
+    {
+        probe = p.to_path_buf();
     }
     fs2::available_space(&probe).map_err(|e| e.to_string())
 }
@@ -495,7 +497,7 @@ fn encode_target_size(img: &image::DynamicImage, target_kb: u32, lossless: bool)
             best = Some(encoded);
             lo = mid + 1;
         } else {
-            if fallback.as_ref().map_or(true, |f| encoded.len() < f.len()) {
+            if fallback.as_ref().is_none_or(|f| encoded.len() < f.len()) {
                 fallback = Some(encoded);
             }
             hi = mid - 1;
@@ -640,13 +642,13 @@ fn convert_single_file(
         return;
     }
     let dims = ImageReader::open(&work_path).ok().and_then(|r| r.into_dimensions().ok());
-    if let Some((w, h)) = dims {
-        if w as u64 * h as u64 > 25_000_000 {
+    if let Some((w, h)) = dims
+        && w as u64 * h as u64 > 25_000_000
+    {
             stats.skip_count += 1;
             emit_progress(app_handle, src_path, "skipped", &format!("too_large:{}x{}", w, h), 0, 0);
             let _ = app_handle.emit("convert-stats", stats.clone());
             return;
-        }
     }
 
     let reader = match ImageReader::open(&work_path)
@@ -789,10 +791,10 @@ fn convert_single_file(
         };
         emit_progress_with_output(app_handle, src_path, "done", &done_msg, saved_bytes, saved_pct, Some(output_str.clone()));
 
-        if request.delete_source && !same_as_source {
-            if let Err(e) = std::fs::remove_file(src_path) {
-                emit_progress(app_handle, src_path, "done", &format!("delete_fail:{}", e), saved_bytes, saved_pct);
-            }
+        if request.delete_source && !same_as_source
+            && let Err(e) = std::fs::remove_file(src_path)
+        {
+            emit_progress(app_handle, src_path, "done", &format!("delete_fail:{}", e), saved_bytes, saved_pct);
         }
     }
     let _ = app_handle.emit("convert-stats", stats.clone());
@@ -895,8 +897,10 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
         }
         let _ = app_handle.emit("convert-done", &stats);
         // 无论成功、失败还是 panic，都必须解锁——这是上面那条 panic 修复的意义所在。
-        if let Some(state) = app_handle.try_state::<AppState>() {
-            if let Ok(mut converting) = state.is_converting.lock() { *converting = false; }
+        if let Some(state) = app_handle.try_state::<AppState>()
+            && let Ok(mut converting) = state.is_converting.lock()
+        {
+            *converting = false;
         }
     });
 
@@ -1343,25 +1347,23 @@ pub fn run() {
                 .expect("PENDING_DOCS poisoned")
                 .drain(..)
                 .collect();
-            if let Some(first) = queued.first() {
-                if let Some(state) = app.try_state::<InitialFile>() {
-                    if let Ok(mut slot) = state.0.lock() {
-                        *slot = Some(first.clone());
-                    }
-                }
+            if let Some(first) = queued.first()
+                && let Some(state) = app.try_state::<InitialFile>()
+                && let Ok(mut slot) = state.0.lock()
+            {
+                *slot = Some(first.clone());
             }
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if let Some(state) = window.try_state::<AppState>() {
-                    if let Ok(converting) = state.is_converting.lock() {
-                        if *converting && !state.should_close.load(Ordering::Relaxed) {
-                            api.prevent_close();
-                            let _ = window.emit("confirm-close", ());
-                        }
-                    }
-                }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && let Some(state) = window.try_state::<AppState>()
+                && let Ok(converting) = state.is_converting.lock()
+                && *converting
+                && !state.should_close.load(Ordering::Relaxed)
+            {
+                api.prevent_close();
+                let _ = window.emit("confirm-close", ());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -1378,12 +1380,11 @@ pub fn run() {
             if !matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
                 return;
             }
-            if let Some(state) = window.app_handle().try_state::<InitialFile>() {
-                if let Ok(slot) = state.0.lock() {
-                    if let Some(path) = slot.as_ref() {
-                        let _ = window.emit("open-file", path.clone());
-                    }
-                }
+            if let Some(state) = window.app_handle().try_state::<InitialFile>()
+                && let Ok(slot) = state.0.lock()
+                && let Some(path) = slot.as_ref()
+            {
+                let _ = window.emit("open-file", path.clone());
             }
         })
         .build(tauri::generate_context!())
@@ -1405,10 +1406,10 @@ pub fn run() {
                     q.clear();
                     q.push(path.to_string());
                 }
-                if let Some(state) = _app_handle.try_state::<InitialFile>() {
-                    if let Ok(mut slot) = state.0.lock() {
-                        *slot = Some(path.to_string());
-                    }
+                if let Some(state) = _app_handle.try_state::<InitialFile>()
+                    && let Ok(mut slot) = state.0.lock()
+                {
+                    *slot = Some(path.to_string());
                 }
                 let _ = _app_handle.emit("open-file", path);
                 break;
