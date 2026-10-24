@@ -16,8 +16,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
-          - platform: windows-latest
+          - os: macos
+            platform: macos-latest
+            arch: aarch64
+            filearch: arm64
+          - os: macos
+            platform: macos-15-intel
+            arch: x64
+            filearch: x86_64
+          - os: windows
+            platform: windows-latest
 
     runs-on: ${{ matrix.platform }}
     permissions:
@@ -38,7 +46,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup cargo mirror (China)
-        if: matrix.platform == 'windows-latest'
+        if: matrix.os == 'windows'
         run: |
           $dir = "$env:USERPROFILE\.cargo"
           New-Item -ItemType Directory -Force $dir | Out-Null
@@ -51,7 +59,7 @@ jobs:
         shell: pwsh
 
       - name: Setup cargo mirror (China)
-        if: matrix.platform == 'macos-latest'
+        if: matrix.os == 'macos'
         run: |
           mkdir -p ~/.cargo
           cat > ~/.cargo/config.toml << 'EOF'
@@ -65,6 +73,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.platform }}
 
       - name: Install npm dependencies
         run: npm install
@@ -73,28 +82,36 @@ jobs:
       #  macOS: 构建 + ad-hoc 签名
       # ──────────────────────────────────────────────
       - name: Build & Sign (macOS)
-        if: matrix.platform == 'macos-latest'
+        if: matrix.os == 'macos'
         run: bash scripts/build-and-sign.sh
 
-      - name: Prepare release artifact (macOS)
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'macos-latest'
+      - name: Stage macOS artifact
+        if: matrix.os == 'macos'
         run: |
+          set -euo pipefail
           VERSION=$(node -p "require('./package.json').version")
-          cp /tmp/pic2webp-signed.dmg "Pic2WebP_${VERSION}_aarch64.dmg"
+          cp /tmp/pic2webp-signed.dmg "Pic2WebP_${VERSION}_${{ matrix.arch }}.dmg"
           APP=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
           [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
-          ditto -c -k --keepParent "$APP" "Rocktier.Pic2WebP.app.zip"
+          file "$APP/Contents/MacOS/"* | tee /dev/stderr | grep -q '${{ matrix.filearch }}'
+
+      - name: Package app.zip (macOS)
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.os == 'macos'
+        run: |
+          APP=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
+          [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
+          ditto -c -k --keepParent "$APP" "Rocktier.Pic2WebP_${{ matrix.arch }}.app.zip"
 
       # ──────────────────────────────────────────────
       #  Windows: 构建
       # ──────────────────────────────────────────────
       - name: Build (Windows)
-        if: matrix.platform == 'windows-latest'
+        if: matrix.os == 'windows'
         run: npm run tauri build
 
       # 微软商店包：tauri-windows-bundle 读取 src-tauri/gen/windows/（清单模板 + 自有磁贴）
       - name: Build MSIX for Microsoft Store (Windows)
-        if: matrix.platform == 'windows-latest'
+        if: matrix.os == 'windows'
         # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
         # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
         run: npm run tauri:windows:build
@@ -103,15 +120,15 @@ jobs:
       #  测试构建产物上传 (main 分支)
       # ──────────────────────────────────────────────
       - name: Upload artifact (macOS)
-        if: github.ref == 'refs/heads/main' && matrix.platform == 'macos-latest'
+        if: github.ref == 'refs/heads/main' && matrix.os == 'macos'
         uses: actions/upload-artifact@v4
         with:
-          name: Pic2WebP-macos-aarch64
-          path: /tmp/pic2webp-signed.dmg
+          name: Pic2WebP-macos-${{ matrix.arch }}
+          path: Pic2WebP_*_${{ matrix.arch }}.dmg
           if-no-files-found: error
 
       - name: Upload artifact (Windows)
-        if: github.ref == 'refs/heads/main' && matrix.platform == 'windows-latest'
+        if: github.ref == 'refs/heads/main' && matrix.os == 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: Pic2WebP-windows-x64
@@ -124,13 +141,13 @@ jobs:
       #  GitHub Release (tag 推送时)
       # ──────────────────────────────────────────────
       - name: Release (macOS)
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'macos-latest'
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.os == 'macos'
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           files: |
-            Pic2WebP_*.dmg
-            Rocktier.Pic2WebP.app.zip
+            Pic2WebP_*_${{ matrix.arch }}.dmg
+            Rocktier.Pic2WebP_${{ matrix.arch }}.app.zip
           generate_release_notes: true
 
       # 只在 Windows 上跑。本仓的 build job 是 matrix（macos + windows 合一），
@@ -138,7 +155,7 @@ jobs:
       # 守卫（found=0 即 exit 1）会在 macOS job 里必然触发，把整个构建拖红。
       # 其余 8 仓都是 build-windows 独立 job，不受这个问题影响。
       - name: Strip _en-US from MSI filename
-        if: matrix.platform == 'windows-latest'
+        if: matrix.os == 'windows'
         shell: bash
         run: |
           shopt -s nullglob
@@ -156,7 +173,7 @@ jobs:
           fi
 
       - name: Release (Windows)
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'windows-latest'
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.os == 'windows'
         uses: softprops/action-gh-release@v2
         with:
           draft: true
@@ -177,7 +194,7 @@ jobs:
     permissions:
       contents: write
     env:
-      REQUIRED_ASSETS: '\.dmg$ \.app\.zip$ \.msi$ \.exe$ \.msix$ \.msixbundle$'
+      REQUIRED_ASSETS: '_aarch64\.dmg$ _x64\.dmg$ _aarch64\.app\.zip$ _x64\.app\.zip$ \.msi$ \.exe$ \.msix$ \.msixbundle$'
     steps:
 # 这个 job **必须 checkout**，否则下面的 gh 命令无法工作。
       # 没有 actions/checkout 就没有 git remote，而 gh 靠 git remote 推断

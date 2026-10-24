@@ -36,7 +36,7 @@
 
 | 平台 | 安装包 | 大小 |
 |------|--------|------|
-| macOS (Apple Silicon) | `.dmg` | ~5 MB |
+| macOS (Apple Silicon / Intel) | `.dmg` | ~5 MB |
 | Windows (x64) | `.exe` (NSIS) | ~5 MB |
 
 ### 首次打开
@@ -133,7 +133,7 @@ Get the latest release from [Releases](https://github.com/Rocktier/pic2webp/rele
 
 | Platform | Package | Size |
 |----------|---------|------|
-| macOS (Apple Silicon) | `.dmg` | ~5 MB |
+| macOS (Apple Silicon / Intel) | `.dmg` | ~5 MB |
 | Windows (x64) | `.exe` (NSIS) | ~5 MB |
 
 ### First launch
