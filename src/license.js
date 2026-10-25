@@ -87,13 +87,10 @@ function updatePill() {
   const show = info && info.channel === "direct" && info.status !== "licensed";
   pill.hidden = !show;
   if (!show) return;
-  if (info.status === "expired") {
-    pill.textContent = t("license.expiredChip");
-    pill.classList.add("expired");
-  } else {
-    pill.textContent = t("license.trialChip", { days: info.daysLeft });
-    pill.classList.remove("expired");
-  }
+  /* 徽标颜色统一由 .badge-license 负责（母版 tokens.css），试用/过期同色，
+     不再加 expired 修饰类 —— 旧 .license-pill.expired 已随本地 CSS 一并删除。 */
+  pill.textContent =
+    info.status === "expired" ? t("license.expiredChip") : t("license.trialChip", { days: info.daysLeft });
 }
 
 // ── 激活：一次联网换回执，之后离线验签、永不联网 ──

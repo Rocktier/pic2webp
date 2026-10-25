@@ -1009,9 +1009,12 @@ if (themeToggle) {
 }
 
 // ── Target size toggle ──
-if (chkTargetSize) {
+/* 显隐切在 #target-size-wrap 上：输入框 + 单位 "KB" 是一个整体，不能只切 input，
+   否则勾选后单位文字不同步出现（2026-10-25 审计 D-78：KB 无单位标注）。 */
+const targetSizeWrap = $("#target-size-wrap");
+if (chkTargetSize && targetSizeWrap) {
   chkTargetSize.addEventListener("change", () => {
-    targetSizeInput.style.display = chkTargetSize.checked ? "inline-block" : "none";
+    targetSizeWrap.hidden = !chkTargetSize.checked;
   });
 }
 
