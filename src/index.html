@@ -651,3 +651,217 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   }
 </style>
 </head>
+
+<!-- ══════════════════════════════════════════════════════════════
+     ↓↓↓ 界面本体（body）↓↓
+     本段是 UI 的全部结构：#app 容器、拖放区、控制面板、对比弹窗，
+     以及两个 ES module 入口（/app.js 与 /updates.js）。
+
+     ⚠️ 2026-10-21（v1.9.14, commit f5297b5）事故记录：
+     那次提交本意只是把「检查更新」入口收进菜单，却顺手把整个 body
+     连同两个 module 入口（app.js / updates.js）一起删掉了 —— 结果应用
+     能开窗、但页面全白（v1.9.14 / v1.9.15 的 macOS 与 Windows 包全部如此）。
+     vite 构建照样成功（产物里只剩 index.html + 字体 + CSS，一个 JS 都没有），
+     CI 全绿，于是发了两版才发现。
+
+     本段已于 2026-10-25 从 v1.9.13 完整恢复。改动本段前务必确认：
+       ① body 的开闭标签成对存在
+       ② app.js 与 updates.js 两个 module 入口仍在
+     家族闸门已加 frontend-entry-integrity 规则把关这两条。
+     ══════════════════════════════════════════════════════════════
+-->
+<body>
+  <div id="app">
+    <!-- ===== Header ===== -->
+    <header data-tauri-drag-region>
+      <div class="logo">
+        <img class="brand-mark" src="/favicon.png" alt="" width="26" height="26" />
+        <div class="logo-text">
+          <h1>Rocktier Pic2WebP<span class="dot-live" aria-hidden="true"></span></h1>
+          <span class="subtitle" data-i18n="subtitle">Images to WebP · A Rocktier tool</span>
+        </div>
+      </div>
+      <div class="header-controls">
+          <button class="license-pill" id="license-pill" hidden></button>
+          <button aria-label="Theme" class="icon-btn" id="theme-toggle" data-mode="auto"
+                  data-i18n-aria="themeBtn" title="Theme">
+            <svg class="monitor" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8M12 17v3.5"/></svg>
+            <svg class="sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+          </button>
+          <select class="lang-toggle" id="lang-toggle"></select>
+          </div>
+    </header>
+
+    <!-- ===== Main layout ===== -->
+    <div class="main-layout">
+      <!-- ===== Left: Drop zone + File list ===== -->
+      <section class="left-panel">
+        <!-- Drop zone -->
+        <div aria-label="Drop images here" id="dropzone" class="dropzone" role="button" tabindex="0" data-i18n-aria="dropzone-text">
+          <div class="dropzone-content">
+            <div class="dropzone-icon">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <p class="dropzone-text" data-i18n="dropzone-text">Drop images here</p>
+            <p class="dropzone-hint" data-i18n="dropzone-hint">or click to select · JPG / PNG / GIF / BMP / TIFF / WebP</p>
+          </div>
+        </div>
+
+        <!-- File list -->
+        <div class="file-list-header">
+          <span><span class="file-count-dot"></span><span id="file-count-text" data-i18n="file-count" data-i18n-params='{"n":0}'>0 file(s) selected</span></span>
+          <span class="file-list-actions"><button id="folder-btn" class="btn-text" data-i18n="select-folder">Select Folder</button><button id="clear-btn" class="btn-text" hidden data-i18n="clear">Clear</button></span>
+        </div>
+        <div class="hint warn" id="folder-hint" hidden data-i18n="folder-hint">Folder detected but subdirectory recursion is off. Enable "Include subdirectories" to process images inside.</div>
+        <div id="file-list" class="file-list">
+          <div class="empty-state" id="empty-state">
+            <p class="empty-hint" data-i18n="empty-hint">Drop images here to start · WebP output, processed locally</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Right: Controls + Stats ===== -->
+      <section class="right-panel">
+        <!-- Quality -->
+        <div class="panel-section">
+          <div class="section-label" data-i18n="output-quality">Output Quality</div>
+          <div class="quality-header">
+            <span class="quality-label" data-i18n="quality">Quality</span>
+            <span class="quality-value" id="quality-val">80</span>
+            <label class="mini-toggle" style="margin-left:auto"><input type="checkbox" id="chk-lossless" /><span data-i18n="lossless">Lossless</span></label>
+          </div>
+          <div class="pill-group" id="quality-pills">
+            <button class="pill-btn" data-q="60" data-i18n="small-file">Smaller</button>
+            <button class="pill-btn active" data-q="80" data-i18n="q-balanced">Balanced</button>
+            <button class="pill-btn" data-q="95" data-i18n="high-quality">Better</button>
+          </div>
+          <label class="mini-toggle" style="margin-top:4px"><input type="checkbox" id="chk-target-size" /><span data-i18n="target-size">Target Size</span></label>
+          <input type="number" id="target-size-input" class="advanced-row input" style="width:72px;display:none" placeholder="KB" min="10" max="10000" value="200" />
+        </div>
+
+        <!-- Options -->
+        <div class="panel-section">
+          <div class="section-label" data-i18n="convert-options">Options</div>
+          <label class="toggle-row">
+            <input type="checkbox" id="chk-recursive" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span data-i18n="recursive">Include subdirectories</span>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" id="chk-delete" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span data-i18n="delete-source">Delete source</span>
+          </label>
+        </div>
+
+        <!-- Output directory -->
+        <div class="panel-section">
+          <div class="section-label" data-i18n="output-dir">Output Directory</div>
+          <div class="dir-row">
+            <input type="text" id="output-dir" class="dir-input" readonly placeholder="Same as source" data-i18n-placeholder="same-dir" />
+            <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
+          </div>
+          <div class="pill-group" id="dir-pills">
+            <button id="dir-btn" class="pill-btn primary" data-i18n="select">Browse</button>
+          </div>
+        </div>
+
+        <!-- Naming mode — pill buttons -->
+        <div class="panel-section">
+          <div class="section-label" data-i18n="naming-rule">Naming</div>
+          <div class="pill-group" id="naming-pills">
+            <button class="pill-btn" data-value="overwrite" data-i18n="overwrite">Overwrite</button>
+            <button class="pill-btn active" data-value="webp-suffix">-webp</button>
+            <button class="pill-btn" data-value="q-suffix">-q80</button>
+            <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">Timestamp</button>
+          </div>
+          <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ Existing .webp files will be overwritten, cannot be undone</div>
+        </div>
+
+
+        <!-- Advanced options (collapsible) -->
+        <div class="panel-section">
+          <div class="section-label" data-i18n="advanced">Advanced</div>
+          <div class="advanced-section" id="advanced-section">
+            <div class="advanced-row">
+              <label class="mini-toggle"><input type="checkbox" id="chk-resize" /><span data-i18n="resize">Resize</span></label>
+              <label data-i18n="resize-width">W</label>
+              <input type="number" id="resize-w" placeholder="1920" min="1" max="20000" />
+              <label data-i18n="resize-height">H</label>
+              <input type="number" id="resize-h" placeholder="auto" min="0" max="20000" />
+              <select id="resize-mode">
+                <option value="fit" data-i18n="resize-fit">Fit</option>
+                <option value="fill" data-i18n="resize-fill">Fill</option>
+                <option value="shrink" data-i18n="resize-shrink">Shrink only</option>
+              </select>
+            </div>
+            <div class="advanced-row">
+              <label class="mini-toggle"><input type="checkbox" id="chk-structure" /><span data-i18n="preserve-structure">Preserve folder structure</span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Separator -->
+        <hr class="divider" />
+
+        <!-- Stats — compact single row -->
+        <div class="stats-panel" id="stats-panel" hidden>
+          <div class="stats-row">
+            <div class="stat-item">
+              <span class="stat-num" id="stat-success">0</span>
+              <span class="stat-lbl" data-i18n="success">Done</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-num" id="stat-skip">0</span>
+              <span class="stat-lbl" data-i18n="skip">Skip</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-num stat-fail" id="stat-fail">0</span>
+              <span class="stat-lbl" data-i18n="fail">Failed</span>
+            </div>
+          </div>
+          <div class="stats-row-bottom">
+            <div class="stat-saved">
+              <span class="stat-saved-val" id="stat-saved">—</span>
+              <span class="stat-saved-lbl" data-i18n="saved">Saved</span>
+            </div>
+            <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">Retry All Failed</button>
+          </div>
+        </div>
+
+        <!-- Conversion progress（P0-19：此前对应 DOM 缺失，进度条永不渲染） -->
+        <div id="progress-bar-container" class="progress-bar-container" hidden>
+          <div class="progress-bar"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
+          <span id="progress-text" class="progress-text"></span>
+        </div>
+
+        <!-- Convert button -->
+        <button id="convert-btn" class="btn-primary" disabled>
+          <span id="btn-text" data-i18n="start-convert">Convert</span>
+          <span id="btn-spinner" class="spinner" hidden></span>
+        </button>
+      </section>
+    </div>
+
+  </div>
+
+  <script type="module" src="/app.js"></script>
+  <script type="module" src="/updates.js"></script>
+
+    <!-- Compare modal -->
+    <div class="compare-modal" id="compare-modal">
+      <div class="compare-toolbar">
+        <button class="compare-mode-btn active" data-mode="side-by-side" id="compare-mode-sbs" data-i18n="compare-side-by-side">Side by Side</button>
+        <button class="compare-mode-btn" data-mode="slider" id="compare-mode-slider" data-i18n="compare-slider">Slider</button>
+      </div>
+      <div class="compare-content" id="compare-content">
+      </div>
+    </div>
+</body>
+
+</html>
