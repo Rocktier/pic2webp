@@ -160,7 +160,7 @@ header {
 }
 .right-panel {
   width: clamp(220px, 25vw, 280px); display: flex; flex-direction: column;
-  justify-content: flex-start; gap: 4px;
+  justify-content: flex-start; gap: 8px; /* 4→8：设置列过密（2026-10-25 审计 D-78） */
   padding: 8px 12px;
   overflow-y: auto; overflow-x: hidden; /* 兜底可滚但不显示滚动条 */
   background: var(--bg-secondary);
@@ -293,7 +293,7 @@ header {
 .status-failed { color: var(--danger); background: var(--bg-card); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 
 /* ───────── 右侧控制 ───────── */
-.panel-section { display: flex; flex-direction: column; gap: 2px; }
+.panel-section { display: flex; flex-direction: column; gap: 4px; } /* 2→4：设置列过密（2026-10-25 审计 D-78） */
 .section-label {
   font-size: 10px; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.2em; color: var(--text-tertiary);
@@ -442,10 +442,16 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .advanced-row input[type="number"], .advanced-row input[type="text"], .advanced-row select {
   padding: 4px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--bg-card); color: var(--text-primary); font-family: var(--font-mono);
+  min-height: 24px; box-sizing: border-box; /* 实测 19px 高 <24 命中下限（2026-10-25 审计 D-78） */
 }
 .advanced-row input[type="number"] { width: 62px; }
 .advanced-row input[type="text"] { width: 124px; }
 .advanced-row select { font-family: var(--font); }
+
+/* KB 目标尺寸输入的容器与单位（D-78：数字输入语义不明） */
+.target-size-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.target-size-wrap[hidden] { display: none; } /* 作者 display 会盖过 UA [hidden]，必须显式补 */
+.target-size-wrap .unit { font-size: 11px; color: var(--text-secondary); }
 
 /* ───────── 语言 / 主题 切换 ───────── */
 .lang-toggle {
@@ -556,14 +562,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   header .logo, header .logo * { pointer-events: none; }
 
   /* ───────── 许可胶囊 + 激活对话框（家族 L6，逻辑在 license.js） ───────── */
-  .license-pill {
-    font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: var(--radius-pill);
-    background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
-    cursor: pointer; flex-shrink: 0; white-space: nowrap;
-  }
-  .license-pill:hover { border-color: var(--border-hover); color: var(--text-primary); }
-  .license-pill.expired { color: var(--danger); border-color: rgba(230,69,55,0.35); }
-  .license-pill[hidden] { display: none; }
+  /* 许可徽标样式已收编为母版 tokens.css 的 .badge-license（单一真源，按钮兼容、
+     min 24×24 命中区、恒用 --danger）。本地只保留这份指针注释；
+     旧 .license-pill 的六色六径随 2026-10-25 审计 D-78 一并作废。 */
 
   .license-overlay {
     position: fixed; inset: 0; z-index: 1100; /* 高于 compare-modal(1000) */
@@ -682,7 +683,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
         </div>
       </div>
       <div class="header-controls">
-          <button class="license-pill" id="license-pill" hidden></button>
+          <button class="badge-license" id="license-pill" hidden></button>
           <button aria-label="Theme" class="icon-btn" id="theme-toggle" data-mode="auto"
                   data-i18n-aria="themeBtn" title="Theme">
             <svg class="monitor" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8M12 17v3.5"/></svg>
@@ -715,7 +716,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
         <!-- File list -->
         <div class="file-list-header">
           <span><span class="file-count-dot"></span><span id="file-count-text" data-i18n="file-count" data-i18n-params='{"n":0}'>0 file(s) selected</span></span>
-          <span class="file-list-actions"><button id="folder-btn" class="btn-text" data-i18n="select-folder">Select Folder</button><button id="clear-btn" class="btn-text" hidden data-i18n="clear">Clear</button></span>
+          <span class="file-list-actions"><button id="folder-btn" class="btn-text" data-i18n="select-folder" title="Scan a folder and add its images (subfolders follow the recursion toggle)">Add Folder…</button><button id="clear-btn" class="btn-text" hidden data-i18n="clear">Clear</button></span>
         </div>
         <div class="hint warn" id="folder-hint" hidden data-i18n="folder-hint">Folder detected but subdirectory recursion is off. Enable "Include subdirectories" to process images inside.</div>
         <div id="file-list" class="file-list">
@@ -741,7 +742,10 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
             <button class="pill-btn" data-q="95" data-i18n="high-quality">Better</button>
           </div>
           <label class="mini-toggle" style="margin-top:4px"><input type="checkbox" id="chk-target-size" /><span data-i18n="target-size">Target Size</span></label>
-          <input type="number" id="target-size-input" class="advanced-row input" style="width:72px;display:none" placeholder="KB" min="10" max="10000" value="200" />
+          <span id="target-size-wrap" class="target-size-wrap" hidden>
+            <input type="number" id="target-size-input" class="advanced-row input" aria-label="Target size in kilobytes (KB)" data-i18n-aria="target-size-aria" placeholder="200" min="10" max="10000" value="200" />
+            <span class="unit" aria-hidden="true">KB</span>
+          </span>
         </div>
 
         <!-- Options -->
