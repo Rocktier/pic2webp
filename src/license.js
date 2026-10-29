@@ -179,7 +179,7 @@ function buildDialog() {
 
   dialog.append(header, body, footer);
   overlay.appendChild(dialog);
-  // 点遮罩 = 取消（与 compare-modal 的既有交互一致）；面板内点击不冒泡。
+  // 点遮罩 = 取消；面板内点击不冒泡。
   overlay.addEventListener("mousedown", (e) => {
     if (e.target === overlay) closeLicenseDialog();
   });

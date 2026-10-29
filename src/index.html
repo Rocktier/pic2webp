@@ -302,7 +302,6 @@ header {
 @media (min-width: 800px) {
   .quality-header { flex-direction: row; align-items: baseline; }
 }
-.quality-label { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
 .quality-value { font-weight: 700; color: var(--accent); font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
 
 /* Toggle — 规范 36×20，checked 变白，位移 16px */
@@ -436,7 +435,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .file-delete-btn:hover { color: var(--danger); background: var(--bg-card-hover); }
 	
 	/* ───────── 高级选项 ───────── */
-.advanced-section { display: block; margin-top: 4px; }
 .advanced-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
 .advanced-row label { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
 .advanced-row input[type="number"], .advanced-row input[type="text"], .advanced-row select {
@@ -447,11 +445,23 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .advanced-row input[type="number"] { width: 62px; }
 .advanced-row input[type="text"] { width: 124px; }
 .advanced-row select { font-family: var(--font); }
+/* W/H 成对不拆行：只让模式下拉在窄栏里单独换行 */
+.resize-dims { display: inline-flex; align-items: center; gap: 6px; }
 
-/* KB 目标尺寸输入的容器与单位（D-78：数字输入语义不明） */
-.target-size-wrap { display: inline-flex; align-items: center; gap: 4px; }
-.target-size-wrap[hidden] { display: none; } /* 作者 display 会盖过 UA [hidden]，必须显式补 */
-.target-size-wrap .unit { font-size: 11px; color: var(--text-secondary); }
+/* 高级选项面板：原生 <details> 折叠，首屏只留质量三档。
+   <summary> 是唯一入口，键盘可达；三角标记自绘，跟随展开态旋转。 */
+.advanced-details { border-top: 1px solid var(--border); padding-top: 6px; }
+.advanced-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  list-style: none; cursor: pointer; min-height: 24px; border-radius: 6px;
+}
+.advanced-summary::-webkit-details-marker { display: none; }
+.advanced-summary:hover .section-label { color: var(--text-secondary); }
+.advanced-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.advanced-chevron { width: 10px; height: 10px; color: var(--text-tertiary); transition: transform .2s; flex-shrink: 0; }
+.advanced-details[open] .advanced-chevron { transform: rotate(180deg); }
+.advanced-body { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
+.advanced-group { display: flex; flex-direction: column; gap: 4px; }
 
 /* ───────── 语言 / 主题 切换 ───────── */
 .lang-toggle {
@@ -485,73 +495,13 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ───────── 主题 Toggle ───────── */
-.compare-modal {
-  position: fixed; inset: 0; z-index: 1000;
-  display: none; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-}
-.compare-modal.visible { display: flex; }
-  .compare-content { max-width: 90vw; max-height: 90vh; display: flex; gap: 16px; padding: 16px; overflow: auto; }
-  .compare-content::-webkit-scrollbar { width: 5px; }
-  .compare-content::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
-  .compare-content::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
-  .compare-content::-webkit-scrollbar-track { background: transparent; }
-.compare-content img { max-width: 45vw; max-height: 80vh; object-fit: contain; border-radius: 12px; }
-.compare-label {
-  position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.7); color: #fff;
-  padding: 2px 9px; border-radius: var(--radius-pill); font-size: 11px; letter-spacing: 0.05em;
-}
-
-/* 批量进度条 */
+/* ───────── 批量进度条 ───────── */
 .progress-bar-container {
   padding: 4px 0 0; display: flex; align-items: center; gap: 8px;
 }
 .progress-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
 .progress-bar-fill { height: 100%; background: var(--red); width: 0%; transition: width .3s ease; }
 .progress-text { font-size: 18px; font-weight: 700; color: var(--text-secondary); font-family: var(--font-mono); white-space: nowrap; }
-
-/* 对比模式切换 */
-.compare-toolbar {
-  display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; justify-content: center;
-}
-.compare-mode-btn {
-  padding: 4px 12px; border: 1px solid var(--border); border-radius: var(--radius-pill);
-  background: var(--bg-card); color: var(--text-secondary); font-size: 11px; cursor: pointer;
-  font-weight: 500;
-}
-.compare-mode-btn.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-.compare-mode-btn:hover:not(.active) { border-color: var(--border-hover); }
-
-/* 叠加 slider 模式 */
-.compare-overlay-wrap {
-  position: relative; max-width: 80vw; max-height: 80vh; overflow: hidden;
-  border-radius: 12px;
-}
-.compare-overlay-wrap img {
-  display: block; max-width: 80vw; max-height: 80vh; object-fit: contain;
-}
-.compare-overlay-wrap .compare-top {
-  position: absolute; top: 0; left: 0; bottom: 0;
-  overflow: hidden;
-  width: 50%;
-}
-.compare-overlay-wrap .compare-top img {
-  position: absolute; top: 0; left: 0;
-  max-width: none; max-height: 80vh;
-}
-.compare-slider-line {
-  position: absolute; top: 0; bottom: 0; width: 3px;
-  background: var(--red); left: 50%; cursor: ew-resize;
-  z-index: 2;
-}
-.compare-slider-handle {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 24px; height: 24px; border-radius: 50%;
-  background: var(--red); border: 3px solid var(--on-accent);
-  z-index: 3; cursor: ew-resize;
-  box-shadow: 0 0 8px rgba(0,0,0,0.3);
-}
 
 /* ───────── 滚动条 ───────── */
 .file-list::-webkit-scrollbar, .right-panel::-webkit-scrollbar { width: 5px; }
@@ -567,7 +517,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
      旧 .license-pill 的六色六径随 2026-10-25 审计 D-78 一并作废。 */
 
   .license-overlay {
-    position: fixed; inset: 0; z-index: 1100; /* 高于 compare-modal(1000) */
+    position: fixed; inset: 0; z-index: 1100; /* 与更新对话框同层，互斥出现 */
     display: flex; align-items: center; justify-content: center;
     background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
@@ -655,7 +605,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 <!-- ══════════════════════════════════════════════════════════════
      ↓↓↓ 界面本体（body）↓↓
-     本段是 UI 的全部结构：#app 容器、拖放区、控制面板、对比弹窗，
+     本段是 UI 的全部结构：#app 容器、拖放区、控制面板，
      以及两个 ES module 入口（/app.js 与 /updates.js）。
 
      ⚠️ 2026-10-21（v1.9.14, commit f5297b5）事故记录：
@@ -728,87 +678,85 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
       <!-- ===== Right: Controls + Stats ===== -->
       <section class="right-panel">
-        <!-- Quality -->
+        <!-- Quality —— 首屏唯一设置项：三档预设 -->
         <div class="panel-section">
-          <div class="section-label" data-i18n="output-quality">Output Quality</div>
           <div class="quality-header">
-            <span class="quality-label" data-i18n="quality">Quality</span>
+            <span class="section-label" data-i18n="output-quality">Output Quality</span>
             <span class="quality-value" id="quality-val">80</span>
-            <label class="mini-toggle" style="margin-left:auto"><input type="checkbox" id="chk-lossless" /><span data-i18n="lossless">Lossless</span></label>
           </div>
           <div class="pill-group" id="quality-pills">
             <button class="pill-btn" data-q="60" data-i18n="small-file">Smaller</button>
             <button class="pill-btn active" data-q="80" data-i18n="q-balanced">Balanced</button>
             <button class="pill-btn" data-q="95" data-i18n="high-quality">Better</button>
           </div>
-          <label class="mini-toggle" style="margin-top:4px"><input type="checkbox" id="chk-target-size" /><span data-i18n="target-size">Target Size</span></label>
-          <span id="target-size-wrap" class="target-size-wrap" hidden>
-            <input type="number" id="target-size-input" class="advanced-row input" aria-label="Target size in kilobytes (KB)" data-i18n-aria="target-size-aria" placeholder="200" min="10" max="10000" value="200" />
-            <span class="unit" aria-hidden="true">KB</span>
-          </span>
         </div>
 
-        <!-- Options -->
-        <div class="panel-section">
-          <div class="section-label" data-i18n="convert-options">Options</div>
-          <label class="toggle-row">
-            <input type="checkbox" id="chk-recursive" />
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-            <span data-i18n="recursive">Include subdirectories</span>
-          </label>
-          <label class="toggle-row">
-            <input type="checkbox" id="chk-delete" />
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-            <span data-i18n="delete-source">Delete source</span>
-          </label>
-        </div>
+        <!-- 其余设置一律收进 Advanced，默认折叠（原生 details，键盘可达） -->
+        <details class="advanced-details" id="advanced-details">
+          <summary class="advanced-summary">
+            <span class="section-label" data-i18n="advanced">Advanced</span>
+            <svg class="advanced-chevron" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l3 3 3-3"/></svg>
+          </summary>
+          <div class="advanced-body">
+            <label class="toggle-row">
+              <input type="checkbox" id="chk-lossless" />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span data-i18n="lossless">Lossless</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="chk-recursive" />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span data-i18n="recursive">Include subdirectories</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="chk-delete" />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span data-i18n="delete-source">Delete source</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="chk-structure" />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span data-i18n="preserve-structure">Preserve folder structure</span>
+            </label>
 
-        <!-- Output directory -->
-        <div class="panel-section">
-          <div class="section-label" data-i18n="output-dir">Output Directory</div>
-          <div class="dir-row">
-            <input type="text" id="output-dir" class="dir-input" readonly placeholder="Same as source" data-i18n-placeholder="same-dir" />
-            <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
-          </div>
-          <div class="pill-group" id="dir-pills">
-            <button id="dir-btn" class="pill-btn primary" data-i18n="select">Browse</button>
-          </div>
-        </div>
+            <div class="advanced-group">
+              <span class="section-label" data-i18n="naming-rule">Naming</span>
+              <div class="pill-group" id="naming-pills">
+                <button class="pill-btn" data-value="overwrite" data-i18n="overwrite">Overwrite</button>
+                <button class="pill-btn active" data-value="webp-suffix">-webp</button>
+                <button class="pill-btn" data-value="q-suffix">-q80</button>
+                <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">Timestamp</button>
+              </div>
+              <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ Existing .webp files will be overwritten, cannot be undone</div>
+            </div>
 
-        <!-- Naming mode — pill buttons -->
-        <div class="panel-section">
-          <div class="section-label" data-i18n="naming-rule">Naming</div>
-          <div class="pill-group" id="naming-pills">
-            <button class="pill-btn" data-value="overwrite" data-i18n="overwrite">Overwrite</button>
-            <button class="pill-btn active" data-value="webp-suffix">-webp</button>
-            <button class="pill-btn" data-value="q-suffix">-q80</button>
-            <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">Timestamp</button>
-          </div>
-          <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ Existing .webp files will be overwritten, cannot be undone</div>
-        </div>
+            <div class="advanced-group">
+              <span class="section-label" data-i18n="output-dir">Output Directory</span>
+              <div class="dir-row">
+                <input type="text" id="output-dir" class="dir-input" readonly placeholder="Same as source" data-i18n-placeholder="same-dir" />
+                <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
+              </div>
+              <div class="pill-group" id="dir-pills">
+                <button id="dir-btn" class="pill-btn primary" data-i18n="select">Browse</button>
+              </div>
+            </div>
 
-
-        <!-- Advanced options (collapsible) -->
-        <div class="panel-section">
-          <div class="section-label" data-i18n="advanced">Advanced</div>
-          <div class="advanced-section" id="advanced-section">
             <div class="advanced-row">
               <label class="mini-toggle"><input type="checkbox" id="chk-resize" /><span data-i18n="resize">Resize</span></label>
-              <label data-i18n="resize-width">W</label>
-              <input type="number" id="resize-w" placeholder="1920" min="1" max="20000" />
-              <label data-i18n="resize-height">H</label>
-              <input type="number" id="resize-h" placeholder="auto" min="0" max="20000" />
-              <select id="resize-mode">
+              <span class="resize-dims">
+                <label data-i18n="resize-width">W</label>
+                <input type="number" id="resize-w" placeholder="1920" min="1" max="20000" aria-label="Resize width in pixels" />
+                <label data-i18n="resize-height">H</label>
+                <input type="number" id="resize-h" placeholder="auto" min="0" max="20000" aria-label="Resize height in pixels" />
+              </span>
+              <select id="resize-mode" aria-label="Resize mode">
                 <option value="fit" data-i18n="resize-fit">Fit</option>
                 <option value="fill" data-i18n="resize-fill">Fill</option>
                 <option value="shrink" data-i18n="resize-shrink">Shrink only</option>
               </select>
             </div>
-            <div class="advanced-row">
-              <label class="mini-toggle"><input type="checkbox" id="chk-structure" /><span data-i18n="preserve-structure">Preserve folder structure</span></label>
-            </div>
           </div>
-        </div>
+        </details>
 
         <!-- Separator -->
         <hr class="divider" />
@@ -856,16 +804,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
   <script type="module" src="/app.js"></script>
   <script type="module" src="/updates.js"></script>
-
-    <!-- Compare modal -->
-    <div class="compare-modal" id="compare-modal">
-      <div class="compare-toolbar">
-        <button class="compare-mode-btn active" data-mode="side-by-side" id="compare-mode-sbs" data-i18n="compare-side-by-side">Side by Side</button>
-        <button class="compare-mode-btn" data-mode="slider" id="compare-mode-slider" data-i18n="compare-slider">Slider</button>
-      </div>
-      <div class="compare-content" id="compare-content">
-      </div>
-    </div>
 </body>
 
 </html>

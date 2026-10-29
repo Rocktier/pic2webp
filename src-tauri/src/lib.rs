@@ -216,8 +216,6 @@ pub struct ConvertRequest {
     #[serde(default)]
     pub preserve_structure: bool,
     #[serde(default)]
-    pub target_size_kb: Option<u32>,
-    #[serde(default)]
     pub resize_enabled: bool,
     #[serde(default)]
     pub resize_width: Option<u32>,
@@ -239,9 +237,6 @@ pub struct FileProgress {
     pub message: String,
     pub saved_bytes: i64,
     pub saved_pct: i32,
-    /// 实际写入的输出文件路径（done 时携带，供前端“对比”功能使用）
-    #[serde(default)]
-    pub output_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -477,39 +472,6 @@ fn encode_webp(img: &image::DynamicImage, quality: i32, lossless: bool) -> Resul
     }
 }
 
-/// Encode with target size (binary search over quality).
-/// 返回 (编码结果, 是否达成了目标体积)。目标不可达时返回**体积最小**的那次编码，
-/// 而不是初始 q80 的结果——旧行为会静默输出比可达最小值大一个数量级的文件。
-fn encode_target_size(img: &image::DynamicImage, target_kb: u32, lossless: bool) -> Result<(Vec<u8>, bool), String> {
-    if lossless {
-        return Ok((encode_webp(img, 100, true)?, false));
-    }
-    let target_bytes = (target_kb as u64) * 1024;
-    let mut best: Option<Vec<u8>> = None;       // ≤ 目标的最大质量结果
-    let mut fallback: Option<Vec<u8>> = None;   // 超出目标时体积最小的一次结果
-    let mut lo = 10i32;
-    let mut hi = 100i32;
-
-    while lo <= hi {
-        let mid = (lo + hi) / 2;
-        let encoded = encode_webp(img, mid, false)?;
-        if encoded.len() as u64 <= target_bytes {
-            best = Some(encoded);
-            lo = mid + 1;
-        } else {
-            if fallback.as_ref().is_none_or(|f| encoded.len() < f.len()) {
-                fallback = Some(encoded);
-            }
-            hi = mid - 1;
-        }
-    }
-    match (best, fallback) {
-        (Some(b), _) => Ok((b, true)),
-        (None, Some(f)) => Ok((f, false)),
-        (None, None) => encode_webp(img, 80, false).map(|b| (b, false)),
-    }
-}
-
 // ─── File collection helper ──────────────────────────────────────────
 
 fn collect_convert_files(request: &ConvertRequest) -> Vec<String> {
@@ -589,7 +551,7 @@ fn convert_single_file(
                 stats.success_count += 1;
                 let saved = original_size - new_size;
                 let pct = if original_size > 0 { (saved * 100 / original_size) as i32 } else { 0 };
-                emit_progress_with_output(app_handle, src_path, "done", &format!("saved:{}kb", new_size / 1024), saved, pct, Some(out_str.clone()));
+                emit_progress(app_handle, src_path, "done", &format!("saved:{}kb", new_size / 1024), saved, pct);
                 if request.delete_source && !is_same_file(src_path, Path::new(&out_str)) {
                     // 与非 GIF 分支保持一致：删不掉要报，不能悄悄吞掉，
                     // 否则用户以为源文件已经没了，其实还在原地。
@@ -748,24 +710,20 @@ fn convert_single_file(
     img = apply_resize(img, request);
 
     // ── Encode ──
-    let mut target_met = true;
-    let webp_mem: Vec<u8> = if let Some(target_kb) = request.target_size_kb {
-        match encode_target_size(&img, target_kb, request.lossless) {
-            Ok((b, met)) => { target_met = met; b }
-            Err(e) => { stats.fail_count += 1; emit_progress(app_handle, src_path, "failed", &e, 0, 0); let _ = app_handle.emit("convert-stats", stats.clone()); return; }
-        }
-    } else {
-        match encode_webp(&img, quality, request.lossless) {
-            Ok(b) => b, Err(e) => { stats.fail_count += 1; emit_progress(app_handle, src_path, "failed", &e, 0, 0); let _ = app_handle.emit("convert-stats", stats.clone()); return; }
+    let webp_mem: Vec<u8> = match encode_webp(&img, quality, request.lossless) {
+        Ok(b) => b,
+        Err(e) => {
+            stats.fail_count += 1;
+            emit_progress(app_handle, src_path, "failed", &e, 0, 0);
+            let _ = app_handle.emit("convert-stats", stats.clone());
+            return;
         }
     };
 
     // ── Write result ──
-    // 目标大小模式会编码多个候选，耗时同样集中在这里；写盘前再让取消一次。
     if cancel_flag.load(Ordering::Relaxed) { return; }
     let new_size = webp_mem.len() as i64;
-    // 产出比原图大（无论常规还是目标大小模式——后者最容易「达标即变大」）
-    // 都没有写盘的意义：跳过并计入 skipped，不再谎报成功。
+    // 产出比原图大都没有写盘的意义：跳过并计入 skipped，不再谎报成功。
     if new_size >= original_size && original_size > 0 {
         stats.skip_count += 1;
         stats.total_original += original_size;
@@ -784,12 +742,8 @@ fn convert_single_file(
         let saved_bytes = (original_size - new_size).max(0);
         let saved_pct = if original_size > 0 { (saved_bytes * 100 / original_size) as i32 } else { 0 };
         stats.success_count += 1;
-        let done_msg = if !target_met {
-            format!("target_unreachable:{}kb", new_size / 1024)
-        } else {
-            format!("saved:{}kb", new_size / 1024)
-        };
-        emit_progress_with_output(app_handle, src_path, "done", &done_msg, saved_bytes, saved_pct, Some(output_str.clone()));
+        let done_msg = format!("saved:{}kb", new_size / 1024);
+        emit_progress(app_handle, src_path, "done", &done_msg, saved_bytes, saved_pct);
 
         if request.delete_source && !same_as_source
             && let Err(e) = std::fs::remove_file(src_path)
@@ -887,7 +841,7 @@ fn start_convert(app: AppHandle, state: State<AppState>, request: ConvertRequest
                     &cancel_flag, &ffmpeg, quality);
             }
 
-            // 目标大小模式下产物可能比原图大；总量与单文件口径保持一致（不让步到负数）
+            // 产物可能比原图大；总量与单文件口径保持一致（不让步到负数）
             stats.saved = (stats.total_original - stats.total_converted).max(0);
             stats.saved_pct = if stats.total_original > 0 { (stats.saved * 100 / stats.total_original) as i32 } else { 0 };
         }));
@@ -1096,25 +1050,12 @@ fn run_cmd_timeout(cmd: &mut Command, secs: u64, cancel_flag: &Arc<AtomicBool>) 
 }
 
 fn emit_progress(app: &AppHandle, file: &str, status: &str, message: &str, saved_bytes: i64, saved_pct: i32) {
-    emit_progress_with_output(app, file, status, message, saved_bytes, saved_pct, None);
-}
-
-fn emit_progress_with_output(
-    app: &AppHandle,
-    file: &str,
-    status: &str,
-    message: &str,
-    saved_bytes: i64,
-    saved_pct: i32,
-    output_path: Option<String>,
-) {
     let progress = FileProgress {
         file: file.to_string(),
         status: status.to_string(),
         message: message.to_string(),
         saved_bytes,
         saved_pct,
-        output_path,
     };
     let _ = app.emit("convert-progress", &progress);
 }

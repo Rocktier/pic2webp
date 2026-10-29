@@ -46,14 +46,11 @@ const statSaved = $("#stat-saved");
 const langToggle = $("#lang-toggle");
 const themeToggle = $("#theme-toggle");
 const chkLossless = $("#chk-lossless");
-const chkTargetSize = $("#chk-target-size");
-const targetSizeInput = $("#target-size-input");
 const chkResize = $("#chk-resize");
 const resizeW = $("#resize-w");
 const resizeH = $("#resize-h");
 const resizeMode = $("#resize-mode");
 const chkStructure = $("#chk-structure");
-const compareModal = $("#compare-modal");
 
 // ─── Build convert request ─────────────────────────────────────────
 function buildRequest(fileList, { recursive, baseDir } = {}) {
@@ -66,7 +63,6 @@ function buildRequest(fileList, { recursive, baseDir } = {}) {
     output_dir: selectedDir || null,
     lossless: chkLossless?.checked ?? false,
     preserve_structure: chkStructure?.checked ?? false,
-    target_size_kb: chkTargetSize?.checked && targetSizeInput ? parseInt(targetSizeInput.value) || null : null,
     resize_enabled: chkResize?.checked ?? false,
     resize_width: resizeW ? parseInt(resizeW.value) || null : null,
     resize_height: resizeH ? parseInt(resizeH.value) || null : null,
@@ -340,125 +336,7 @@ function renderFiles() {
         }
       });
     }
-
-    // Double-click for compare
-    item.addEventListener("dblclick", () => {
-      showCompare(f.path);
-    });
   }
-}
-
-async function showCompare(filePath) {
-  if (!isTauri()) return;
-  const content = document.getElementById("compare-content");
-  if (!content) return;
-  content.innerHTML = "";
-
-  let currentMode = "side-by-side";
-  let origSrc = null;
-  let convSrc = null;
-
-  // Load original thumbnail
-  try {
-    origSrc = await invoke("generate_thumbnail", { path: filePath, size: 600 });
-  } catch (_) {}
-
-  // Find converted file: 优先使用后端转换时回报的真实输出路径
-  //（否则在输出目录/-q80/时间戳命名/AVIF 等情况下永远找不到文件）
-  const record = files.find((f) => f.path === filePath);
-  const webpPath = record?.outputPath || null;
-  if (webpPath) {
-    try {
-      convSrc = await invoke("generate_thumbnail", { path: webpPath, size: 600 });
-    } catch (_) {}
-  }
-
-  function renderSideBySide() {
-    content.innerHTML = "";
-    const origDiv = document.createElement("div");
-    origDiv.style.position = "relative";
-    origDiv.innerHTML = `<div class="compare-label">Original</div><img src="${origSrc || ''}" />`;
-    content.appendChild(origDiv);
-    const convDiv = document.createElement("div");
-    convDiv.style.position = "relative";
-    convDiv.innerHTML = `<div class="compare-label">WebP</div><img src="${convSrc || ''}" />`;
-    content.appendChild(convDiv);
-  }
-
-  function renderSlider() {
-    content.innerHTML = `
-      <div class="compare-overlay-wrap" id="compare-overlay">
-        <img src="${convSrc || ''}" alt="Converted" />
-        <div class="compare-top" id="compare-top">
-          <img src="${origSrc || ''}" alt="Original" />
-        </div>
-        <div class="compare-slider-line" id="compare-slider-line">
-          <div class="compare-slider-handle"></div>
-        </div>
-      </div>`;
-    
-    const overlay = document.getElementById("compare-overlay");
-    const top = document.getElementById("compare-top");
-    const line = document.getElementById("compare-slider-line");
-    if (!overlay || !top || !line) return;
-    
-    let isDragging = false;
-
-    function setPos(e) {
-      const rect = overlay.getBoundingClientRect();
-      let x = (e.clientX || e.touches?.[0]?.clientX) - rect.left;
-      x = Math.max(0, Math.min(x, rect.width));
-      const pct = (x / rect.width) * 100;
-      top.style.width = pct + "%";
-      line.style.left = pct + "%";
-    }
-
-    function onStart(e) {
-      isDragging = true;
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onEnd);
-      document.addEventListener("touchmove", onTouchMove, { passive: true });
-      document.addEventListener("touchend", onEnd);
-    }
-
-    function onMove(e) { if (isDragging) setPos(e); }
-    function onTouchMove(e) { if (isDragging) setPos(e); }
-    function onEnd() {
-      isDragging = false;
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onEnd);
-      document.removeEventListener("touchmove", onTouchMove);
-      document.removeEventListener("touchend", onEnd);
-    }
-
-    line.addEventListener("mousedown", onStart);
-    line.addEventListener("touchstart", onStart, { passive: true });
-    // Click to move
-    overlay.addEventListener("click", (e) => setPos(e));
-  }
-
-  // Initial render
-  renderSideBySide();
-
-  // Mode toggle buttons
-  const sbsBtn = document.getElementById("compare-mode-sbs");
-  const sliderBtn = document.getElementById("compare-mode-slider");
-  if (sbsBtn && sliderBtn) {
-    sbsBtn.addEventListener("click", () => {
-      sbsBtn.classList.add("active");
-      sliderBtn.classList.remove("active");
-      currentMode = "side-by-side";
-      renderSideBySide();
-    });
-    sliderBtn.addEventListener("click", () => {
-      sliderBtn.classList.add("active");
-      sbsBtn.classList.remove("active");
-      currentMode = "slider";
-      renderSlider();
-    });
-  }
-
-  compareModal.classList.add("visible");
 }
 
 function statusLabel(s) {
@@ -647,7 +525,7 @@ async function confirmDiskSpace() {
   if (!dest) return true;
   try {
     const free = await invoke("check_disk_space", { path: dest });
-    // +10% 余量：目录元数据、时间戳命名重试、目标大小模式都可能放大产物
+    // +10% 余量：目录元数据、时间戳命名重试都可能放大产物
     if (typeof free === "number" && free < need * 1.1) {
       return await ask(t("confirm-disk-space", {
         free: formatBytes(free),
@@ -869,13 +747,6 @@ document.addEventListener("keydown", (e) => {
   const tag = e.target.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
   
-  // Escape close compare modal
-  if (e.key === "Escape") {
-    if (compareModal.classList.contains("visible")) {
-      compareModal.classList.remove("visible");
-    }
-  }
-  
   // Cmd+Backspace clear all files
   if ((e.metaKey || e.ctrlKey) && e.key === "Backspace") {
     if (files.length > 0) {
@@ -1008,16 +879,6 @@ if (themeToggle) {
   window.addEventListener("lang-changed", () => syncButton(readMode()));
 }
 
-// ── Target size toggle ──
-/* 显隐切在 #target-size-wrap 上：输入框 + 单位 "KB" 是一个整体，不能只切 input，
-   否则勾选后单位文字不同步出现（2026-10-25 审计 D-78：KB 无单位标注）。 */
-const targetSizeWrap = $("#target-size-wrap");
-if (chkTargetSize && targetSizeWrap) {
-  chkTargetSize.addEventListener("change", () => {
-    targetSizeWrap.hidden = !chkTargetSize.checked;
-  });
-}
-
 // 选择文件夹（部分平台拖不进目录，给一个显式入口）
 const folderBtn = document.getElementById("folder-btn");
 if (folderBtn) {
@@ -1028,13 +889,6 @@ if (folderBtn) {
     } catch (e) {
       console.warn("Folder dialog not available:", e);
     }
-  });
-}
-
-// ── Compare modal ──
-if (compareModal) {
-  compareModal.addEventListener("click", (e) => {
-    if (e.target === compareModal) compareModal.classList.remove("visible");
   });
 }
 
