@@ -200,7 +200,7 @@ async fn store_receipt(signed: String) -> Result<LicenseInfo, String> {
 
 // ─── Data types ─────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ConvertRequest {
     pub files: Vec<String>,
     pub quality: i32,
@@ -434,11 +434,15 @@ fn apply_resize(img: image::DynamicImage, req: &ConvertRequest) -> image::Dynami
             )
         }
         "fill" => {
-            // Fill exactly target dimensions (may distort aspect ratio)
+            // Fill exactly target dimensions (may distort aspect ratio).
+            // 只给了一边时无法"填满"，按给定边等比缩放——旧行为是原样返回，
+            // 用户以为设了尺寸其实什么都没发生。
             if target_w > 0 && target_h > 0 {
                 img.resize_exact(target_w, target_h, filter)
+            } else if target_w > 0 {
+                img.resize(target_w, u32::MAX, filter)
             } else {
-                img
+                img.resize(u32::MAX, target_h, filter)
             }
         }
         _ => {
@@ -1394,6 +1398,34 @@ mod tests {
         assert!(free.is_ok(), "probe failed: {:?}", free.err());
         assert!(free.unwrap() > 0);
         std::fs::remove_file(&f).ok();
+    }
+
+    #[test]
+    fn fill_with_one_dimension_scales_instead_of_returning_original() {
+        // 只给宽、模式 fill：旧行为原样返回，用户设了尺寸却看不出变化。
+        let img = image::DynamicImage::new_rgb8(400, 200);
+        let req = ConvertRequest {
+            resize_enabled: true,
+            resize_width: Some(100),
+            resize_height: None,
+            resize_mode: "fill".into(),
+            ..Default::default()
+        };
+        let out = apply_resize(img, &req);
+        assert_eq!(out.width(), 100);
+        assert_eq!(out.height(), 50, "等比缩放到给定边，不应改变纵横比");
+
+        // 两边都给时仍是精确拉伸（fill 的语义不变）。
+        let img = image::DynamicImage::new_rgb8(400, 200);
+        let req = ConvertRequest {
+            resize_enabled: true,
+            resize_width: Some(100),
+            resize_height: Some(100),
+            resize_mode: "fill".into(),
+            ..Default::default()
+        };
+        let out = apply_resize(img, &req);
+        assert_eq!((out.width(), out.height()), (100, 100));
     }
 
     /// 验收（FAMILY-LICENSE.md §6）：把试用起始时间改到过期后，

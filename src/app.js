@@ -342,7 +342,6 @@ function renderFiles() {
 function statusLabel(s) {
   const m = {
     pending: t("status-pending"),
-    compressing: t("status-compressing"),
     converting: t("status-converting"),
     done: t("status-done"),
     skipped: t("status-skipped"),
@@ -377,7 +376,7 @@ function updateFileProgress(filePath, status, message, savedBytes, savedPct, out
     size.textContent = savedBytes > 0 ? t("saved-bytes", { size: formatBytes(savedBytes) }) : translateBackendMessage(message) || "";
 
     // Auto-scroll to the file currently being processed
-    if (status === "compressing" || status === "converting") {
+    if (status === "converting") {
       item.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }
@@ -785,7 +784,7 @@ async function setupListeners() {
     isConverting = false;
   for (const f of files) {
     // 取消时后端不再为被中断的文件补发状态，否则会永久卡在"转换中"
-    if (f.status === "converting" || f.status === "compressing") f.status = "pending";
+    if (f.status === "converting") f.status = "pending";
     if (f.status === "pending") {
         f.message = "";
         f.savedBytes = 0;
