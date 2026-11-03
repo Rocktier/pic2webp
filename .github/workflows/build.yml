@@ -79,18 +79,44 @@ jobs:
         run: npm install
 
       # ──────────────────────────────────────────────
-      #  macOS: 构建 + ad-hoc 签名
+      #  macOS: 构建 + 签名（有证书则 Developer ID + 公证，否则 ad-hoc）
       # ──────────────────────────────────────────────
       - name: Build & Sign (macOS)
         if: matrix.os == 'macos'
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: bash scripts/build-and-sign.sh
 
       - name: Stage macOS artifact
         if: matrix.os == 'macos'
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
         run: |
           set -euo pipefail
           VERSION=$(node -p "require('./package.json').version")
-          cp /tmp/pic2webp-signed.dmg "Pic2WebP_${VERSION}_${{ matrix.arch }}.dmg"
+          DMG="Pic2WebP_${VERSION}_${{ matrix.arch }}.dmg"
+          cp /tmp/pic2webp-signed.dmg "$DMG"
+
+          # 最终 DMG 校验：拷贝来源存在不等于拷贝成功，必须落到暂存件上验
+          [ -f "$DMG" ] && [ "$(stat -f%z "$DMG")" -gt 0 ] \
+            || { echo "::error::staged DMG missing or zero bytes: $DMG"; exit 1; }
+          codesign --verify "$DMG" \
+            || { echo "::error::staged DMG signature is invalid"; exit 1; }
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            # case 而非 grep -q：pipefail 下 grep 提前退出会让 codesign 收 SIGPIPE(141)
+            info=$(codesign -dv --verbose=4 "$DMG" 2>&1 || true)
+            case "$info" in *"Authority=Developer ID Application"*) ;; *)
+              echo "::error::staged DMG is missing Developer ID authority"; exit 1 ;; esac
+            case "$info" in *"Timestamp="*) ;; *)
+              echo "::error::staged DMG signature has no secure timestamp"; exit 1 ;; esac
+          else
+            echo "::notice::ad-hoc build: DMG authority/timestamp assertions skipped (by design)."
+          fi
+
           APP=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
           [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
           file "$APP/Contents/MacOS/"* | tee /dev/stderr | grep -q '${{ matrix.filearch }}'
