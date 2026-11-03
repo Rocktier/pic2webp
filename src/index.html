@@ -120,11 +120,20 @@ header .logo, header .logo * { pointer-events: none; }
   padding: 16px 14px 14px;
   border-left: 1px solid var(--border);
   background: var(--bg-secondary);
-  overflow-y: auto; overflow-x: hidden;
+  /* 主操作不进滚动区。此前整栏 overflow-y:auto，展开 Advanced 后「开始转换」被
+     推到视口下方，而家族铁律是任何情况下不出现滚动条（见 Compressor styles.css:55），
+     于是用户既看不见按钮、也看不见「还能往下滚」的暗示 —— 症状是「这软件没有导出」。 */
+  overflow: hidden;
   min-height: 0;
 }
-.right-panel { scrollbar-width: none; }
-.right-panel::-webkit-scrollbar { display: none; }
+.panel-scroll {
+  display: flex; flex-direction: column; gap: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+}
+.panel-scroll { scrollbar-width: none; }
+.panel-scroll::-webkit-scrollbar { display: none; }
 
 /* ───────── 拖放区：一条虚线横幅（设计稿 dropbar），空态放大成主视觉 ───────── */
 .dropzone {
@@ -658,122 +667,127 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
       <!-- ===== 右：输出设置 + 统计 + 唯一主操作 ===== -->
       <section class="right-panel">
-        <!-- Quality —— 首屏唯一设置项：三档预设（设计稿 seg 分段控件） -->
-        <div class="panel-section">
-          <div class="quality-header">
-            <span class="section-label" data-i18n="output-quality">Output Quality</span>
-            <span class="quality-value" id="quality-val">80</span>
+        <!-- 滚动区只包设置内容：主操作留在滚动区之外，永远在视线内 -->
+        <div class="panel-scroll">
+          <!-- Quality —— 首屏唯一设置项：三档预设（设计稿 seg 分段控件） -->
+          <div class="panel-section">
+            <div class="quality-header">
+              <span class="section-label" data-i18n="output-quality">Output Quality</span>
+              <span class="quality-value" id="quality-val">80</span>
+            </div>
+            <div class="pill-group" id="quality-pills">
+              <button class="pill-btn" data-q="60" data-i18n="small-file">Smaller</button>
+              <button class="pill-btn active" data-q="80" data-i18n="q-balanced">Balanced</button>
+              <button class="pill-btn" data-q="95" data-i18n="high-quality">Better</button>
+            </div>
+            <p class="note" id="quality-note" data-i18n="quality-note">Balanced is about quality 80. Turn on Lossless for a pixel-perfect copy.</p>
           </div>
-          <div class="pill-group" id="quality-pills">
-            <button class="pill-btn" data-q="60" data-i18n="small-file">Smaller</button>
-            <button class="pill-btn active" data-q="80" data-i18n="q-balanced">Balanced</button>
-            <button class="pill-btn" data-q="95" data-i18n="high-quality">Better</button>
+
+          <!-- 其余设置一律收进 Advanced，默认折叠（原生 details，键盘可达） -->
+          <details class="advanced-details" id="advanced-details">
+            <summary class="advanced-summary">
+              <span class="section-label" data-i18n="advanced">Advanced</span>
+              <svg class="advanced-chevron" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l3 3 3-3"/></svg>
+            </summary>
+            <div class="advanced-body">
+              <label class="toggle-row">
+                <input type="checkbox" id="chk-lossless" />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span data-i18n="lossless">Lossless</span>
+              </label>
+              <label class="toggle-row">
+                <input type="checkbox" id="chk-recursive" />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span data-i18n="recursive">Include subdirectories</span>
+              </label>
+              <label class="toggle-row">
+                <input type="checkbox" id="chk-delete" />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span data-i18n="delete-source">Delete source</span>
+              </label>
+              <label class="toggle-row">
+                <input type="checkbox" id="chk-structure" />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span data-i18n="preserve-structure">Preserve folder structure</span>
+              </label>
+
+              <div class="advanced-group">
+                <span class="section-label" data-i18n="naming-rule">Naming</span>
+                <div class="pill-group" id="naming-pills">
+                  <button class="pill-btn" data-value="overwrite" data-i18n="overwrite">Overwrite</button>
+                  <button class="pill-btn active" data-value="webp-suffix">-webp</button>
+                  <button class="pill-btn" data-value="q-suffix">-q80</button>
+                  <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">Timestamp</button>
+                </div>
+                <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ Existing .webp files will be overwritten, cannot be undone</div>
+              </div>
+
+              <div class="advanced-group">
+                <span class="section-label" data-i18n="output-dir">Output Directory</span>
+                <div class="dir-row">
+                  <input type="text" id="output-dir" class="dir-input" readonly placeholder="Same as source" data-i18n-placeholder="same-dir" />
+                  <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
+                </div>
+                <div class="pill-group" id="dir-pills">
+                  <button id="dir-btn" class="pill-btn primary" data-i18n="select">Browse</button>
+                </div>
+              </div>
+
+              <div class="advanced-row">
+                <label class="mini-toggle"><input type="checkbox" id="chk-resize" /><span data-i18n="resize">Resize</span></label>
+                <span class="resize-dims">
+                  <label data-i18n="resize-width">W</label>
+                  <input type="number" id="resize-w" placeholder="1920" min="1" max="20000" aria-label="Resize width in pixels" />
+                  <label data-i18n="resize-height">H</label>
+                  <input type="number" id="resize-h" placeholder="auto" min="0" max="20000" aria-label="Resize height in pixels" />
+                </span>
+                <select id="resize-mode" aria-label="Resize mode">
+                  <option value="fit" data-i18n="resize-fit">Fit</option>
+                  <option value="fill" data-i18n="resize-fill">Fill</option>
+                  <option value="shrink" data-i18n="resize-shrink">Shrink only</option>
+                </select>
+              </div>
+            </div>
+          </details>
+
+          <!-- Separator -->
+          <hr class="divider" />
+
+          <!-- Stats — 设计稿 total：一枚省下的大数字 + 一行小字计数 -->
+          <div class="stats-panel" id="stats-panel" hidden>
+            <div class="stat-saved">
+              <span class="stat-saved-val" id="stat-saved">—</span>
+              <span class="stat-saved-lbl" data-i18n="saved">Saved</span>
+            </div>
+            <div class="stats-row">
+              <div class="stat-item">
+                <span class="stat-num" id="stat-success">0</span>
+                <span class="stat-lbl" data-i18n="success">Done</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-num" id="stat-skip">0</span>
+                <span class="stat-lbl" data-i18n="skip">Skip</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-num stat-fail" id="stat-fail">0</span>
+                <span class="stat-lbl" data-i18n="fail">Failed</span>
+              </div>
+            </div>
+            <div class="stats-row-bottom">
+              <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">Retry All Failed</button>
+            </div>
           </div>
-          <p class="note" id="quality-note" data-i18n="quality-note">Balanced is about quality 80. Turn on Lossless for a pixel-perfect copy.</p>
+
+          <!-- Conversion progress（P0-19：此前对应 DOM 缺失，进度条永不渲染） -->
+          <div id="progress-bar-container" class="progress-bar-container" hidden>
+            <div class="progress-bar"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
+            <span id="progress-text" class="progress-text"></span>
+          </div>
+
         </div>
 
-        <!-- 其余设置一律收进 Advanced，默认折叠（原生 details，键盘可达） -->
-        <details class="advanced-details" id="advanced-details">
-          <summary class="advanced-summary">
-            <span class="section-label" data-i18n="advanced">Advanced</span>
-            <svg class="advanced-chevron" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l3 3 3-3"/></svg>
-          </summary>
-          <div class="advanced-body">
-            <label class="toggle-row">
-              <input type="checkbox" id="chk-lossless" />
-              <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              <span data-i18n="lossless">Lossless</span>
-            </label>
-            <label class="toggle-row">
-              <input type="checkbox" id="chk-recursive" />
-              <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              <span data-i18n="recursive">Include subdirectories</span>
-            </label>
-            <label class="toggle-row">
-              <input type="checkbox" id="chk-delete" />
-              <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              <span data-i18n="delete-source">Delete source</span>
-            </label>
-            <label class="toggle-row">
-              <input type="checkbox" id="chk-structure" />
-              <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              <span data-i18n="preserve-structure">Preserve folder structure</span>
-            </label>
-
-            <div class="advanced-group">
-              <span class="section-label" data-i18n="naming-rule">Naming</span>
-              <div class="pill-group" id="naming-pills">
-                <button class="pill-btn" data-value="overwrite" data-i18n="overwrite">Overwrite</button>
-                <button class="pill-btn active" data-value="webp-suffix">-webp</button>
-                <button class="pill-btn" data-value="q-suffix">-q80</button>
-                <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">Timestamp</button>
-              </div>
-              <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">⚠️ Existing .webp files will be overwritten, cannot be undone</div>
-            </div>
-
-            <div class="advanced-group">
-              <span class="section-label" data-i18n="output-dir">Output Directory</span>
-              <div class="dir-row">
-                <input type="text" id="output-dir" class="dir-input" readonly placeholder="Same as source" data-i18n-placeholder="same-dir" />
-                <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
-              </div>
-              <div class="pill-group" id="dir-pills">
-                <button id="dir-btn" class="pill-btn primary" data-i18n="select">Browse</button>
-              </div>
-            </div>
-
-            <div class="advanced-row">
-              <label class="mini-toggle"><input type="checkbox" id="chk-resize" /><span data-i18n="resize">Resize</span></label>
-              <span class="resize-dims">
-                <label data-i18n="resize-width">W</label>
-                <input type="number" id="resize-w" placeholder="1920" min="1" max="20000" aria-label="Resize width in pixels" />
-                <label data-i18n="resize-height">H</label>
-                <input type="number" id="resize-h" placeholder="auto" min="0" max="20000" aria-label="Resize height in pixels" />
-              </span>
-              <select id="resize-mode" aria-label="Resize mode">
-                <option value="fit" data-i18n="resize-fit">Fit</option>
-                <option value="fill" data-i18n="resize-fill">Fill</option>
-                <option value="shrink" data-i18n="resize-shrink">Shrink only</option>
-              </select>
-            </div>
-          </div>
-        </details>
-
-        <!-- Separator -->
-        <hr class="divider" />
-
-        <!-- Stats — 设计稿 total：一枚省下的大数字 + 一行小字计数 -->
-        <div class="stats-panel" id="stats-panel" hidden>
-          <div class="stat-saved">
-            <span class="stat-saved-val" id="stat-saved">—</span>
-            <span class="stat-saved-lbl" data-i18n="saved">Saved</span>
-          </div>
-          <div class="stats-row">
-            <div class="stat-item">
-              <span class="stat-num" id="stat-success">0</span>
-              <span class="stat-lbl" data-i18n="success">Done</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-num" id="stat-skip">0</span>
-              <span class="stat-lbl" data-i18n="skip">Skip</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-num stat-fail" id="stat-fail">0</span>
-              <span class="stat-lbl" data-i18n="fail">Failed</span>
-            </div>
-          </div>
-          <div class="stats-row-bottom">
-            <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">Retry All Failed</button>
-          </div>
-        </div>
-
-        <!-- Conversion progress（P0-19：此前对应 DOM 缺失，进度条永不渲染） -->
-        <div id="progress-bar-container" class="progress-bar-container" hidden>
-          <div class="progress-bar"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
-          <span id="progress-text" class="progress-text"></span>
-        </div>
-
-        <!-- 主操作只有一个：转换 / 取消，固定在右栏底部 -->
+        <!-- 主操作只有一个：转换 / 取消。刻意留在 .panel-scroll 之外 —— 滚动的是上面的
+             设置区，按钮本身不随滚动离开视口（事故口径见 .right-panel 注释）。 -->
         <button id="convert-btn" class="btn-primary" disabled>
           <span id="btn-text" data-i18n="start-convert">Convert</span>
           <span id="btn-spinner" class="spinner" hidden></span>
