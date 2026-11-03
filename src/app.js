@@ -22,6 +22,14 @@ const LARGE_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
 const $ = (s) => document.querySelector(s);
 
+// 瓦片用 innerHTML 拼装，文件名 / 路径 / 后端消息都要过这一层：
+// 一个叫 `<img src=x onerror=…>` 的文件就能在 webview 里执行脚本。
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 const dropzone = $("#dropzone");
 const fileList = $("#file-list");
 const fileCountText = $("#file-count-text");
@@ -51,6 +59,12 @@ const resizeW = $("#resize-w");
 const resizeH = $("#resize-h");
 const resizeMode = $("#resize-mode");
 const chkStructure = $("#chk-structure");
+
+// 状态栏（2026-10-30 重构：状态文字必须与真实状态一致，见 updateStatusbar）
+const statusDot = $("#status-dot");
+const statusText = $("#status-text");
+const statusMeta = $("#status-meta");
+const fileSummary = $("#file-summary");
 
 // ─── Build convert request ─────────────────────────────────────────
 function buildRequest(fileList, { recursive, baseDir } = {}) {
@@ -105,7 +119,12 @@ async function addFiles(paths) {
       continue;
     }
     if (!files.some((f) => f.path === p)) {
-      files.push({ path: p, status: "pending", message: "", savedBytes: 0, savedPct: 0, size: 0, outputPath: null });
+      // isFolder 必须记下来：后端会把目录展开成若干实际文件，目录行自己
+      // 永远收不到进度事件（见 batchEventStatus / finalizeFolderRows）。
+      files.push({
+        path: p, isFolder, status: "pending", message: "",
+        savedBytes: 0, savedPct: 0, size: 0, outputPath: null,
+      });
     }
   }
   renderFiles();
@@ -236,12 +255,12 @@ const thumbInFlight = new Set();
 let thumbActive = 0;
 const thumbWaiting = [];
 
-function loadThumbnail(path, onDone, onFail) {
+function loadThumbnail(path, onDone, onFail, size = 320) {
   if (thumbInFlight.has(path)) return;
   thumbInFlight.add(path);
   const run = () => {
     thumbActive++;
-    invoke("generate_thumbnail", { path, size: 48 })
+    invoke("generate_thumbnail", { path, size })
       .then((dataUrl) => { thumbCache.set(path, dataUrl); onDone(dataUrl); })
       .catch((e) => { console.warn("Thumbnail failed for", path, e); if (onFail) onFail(); })
       .finally(() => {
@@ -255,6 +274,79 @@ function loadThumbnail(path, onDone, onFail) {
   else thumbWaiting.push(run);
 }
 
+// ─── 瓦片内容：尺寸行 / 角标 ────────────────────────────────────────
+// 不编造数据：原始体积来自 get_file_size，产物体积 = 原始 − saved_bytes
+// （saved_bytes 由后端在 convert-progress 里逐文件回报）。
+
+// 目录行的尺寸行：它展开出的文件数（真实事件计数，不是估算）。
+function folderNote(f) {
+  if (f.folderNote) return f.folderNote;
+  const set = batchFolderFiles.get(f.path);
+  if (set && set.size > 0) return t("folder-files", { n: set.size });
+  return "";
+}
+
+function sizeLineText(f) {
+  if (f.isFolder) return folderNote(f);
+  if (f.savedBytes > 0 && f.size > 0 && f.size > f.savedBytes) {
+    return `${formatBytes(f.size)} → ${formatBytes(f.size - f.savedBytes)}`;
+  }
+  if (f.savedBytes > 0) return t("saved-bytes", { size: formatBytes(f.savedBytes) });
+  if (f.message) return translateBackendMessage(f.message) || "";
+  if (f.size > 0) return formatBytes(f.size);
+  return "";
+}
+
+// 缩略图角标（设计稿签名元素）：完成后一枚 −N%；待转/跳过是中性灰状态字。
+function pctBadge(f) {
+  if (f.isFolder) return null;
+  if (f.savedPct > 0) return { cls: "pct-badge", text: `−${f.savedPct}%` };
+  if (f.status === "skipped") return { cls: "pct-badge muted", text: t("badge-skipped") };
+  if (f.status === "pending" || f.status === "converting") {
+    return { cls: "pct-badge muted", text: t("badge-pending") };
+  }
+  return null;
+}
+
+function statusHtml(f) {
+  if (f.status === "converting") {
+    // 红点旁边永远有文字（家族口径 §一.2）
+    return `<span class="file-status status-converting busy"><span class="dot-live" aria-hidden="true"></span>${statusLabel(f.status)}</span>`;
+  }
+  return `<span class="file-status status-${f.status}">${statusLabel(f.status)}</span>`;
+}
+
+// 不用 CSS.escape（它用于 CSS 标识符，不适合属性值），
+// 改为遍历查找，兼容 Windows 路径中的反斜杠
+function findFileItem(path) {
+  for (const el of fileList.querySelectorAll(".file-item")) {
+    if (el.dataset.path === path) return el;
+  }
+  return null;
+}
+
+// 目录行的局部刷新：事件密集（每个展开出的文件一条），只改变化的部分，
+// 不整表重绘。
+function updateFolderRowDom(owner) {
+  const item = findFileItem(owner.path);
+  if (!item) return;
+  const badge = item.querySelector(".file-status");
+  if (badge) {
+    const cls = `file-status status-${owner.status}` + (owner.status === "converting" ? " busy" : "");
+    if (badge.className !== cls) {
+      badge.className = cls;
+      badge.innerHTML = owner.status === "converting"
+        ? `<span class="dot-live" aria-hidden="true"></span>${statusLabel(owner.status)}`
+        : statusLabel(owner.status);
+    }
+  }
+  const size = item.querySelector(".file-size");
+  if (size) {
+    const text = folderNote(owner);
+    if (size.textContent !== text) size.textContent = text;
+  }
+}
+
 function renderFiles() {
   fileList.innerHTML = "";
 
@@ -266,7 +358,9 @@ function renderFiles() {
     fileCountText.textContent = t("file-count", { n: files.length });
     clearBtn.hidden = true;
     dropzone.classList.add("empty");
-    
+    updateFileSummary();
+    updateStatusbar();
+    updateStatusMeta();
     return;
   }
 
@@ -288,27 +382,34 @@ function renderFiles() {
     const thumbTint = thumbTints[ext] || 'rgba(120,120,128,0.13)';
     const thumbSrc = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="4" fill="' + thumbTint + '"/><text x="16" y="22" text-anchor="middle" fill="#8e8e93" font-size="11" font-weight="600">' + ext.toUpperCase() + '</text></svg>')}`;
     // Async load real thumbnail（并发上限 + 缓存去重：一次拖入几百张不再瞬时 N 个 invoke）
+    // 2026-10-30 重构：列表改成瓦片网格后缩略图是主视觉，48px 拉到 ~200px 会糊，
+    // 改取 320px（generate_thumbnail 按 box 缩放，后端不用动）。
     if (isTauri()) {
       const cached = thumbCache.get(f.path);
       const thumbEl = () => item.querySelector(".file-thumb");
       if (cached) { const el = thumbEl(); if (el) el.src = cached; }
       else loadThumbnail(f.path,
         (dataUrl) => { const el = thumbEl(); if (el) el.src = dataUrl; },
-        () => { const el = thumbEl(); if (el) el.style.opacity = "0.3"; });
+        () => { const el = thumbEl(); if (el) el.style.opacity = "0.3"; }, 320);
     }
 
     const retryBtn = f.status === "failed"
-      ? `<button class="retry-btn" data-path="${f.path}" title="${t("retry")}">↻</button>`
+      ? `<button class="retry-btn" data-path="${esc(f.path)}" title="${esc(t("retry"))}">↻</button>`
       : "";
-    const deleteBtn = `<button class="file-delete-btn" data-path="${f.path}" title="${t("remove-file")}">×</button>`;
+    const deleteBtn = `<button class="file-delete-btn" data-path="${esc(f.path)}" title="${esc(t("remove-file"))}">×</button>`;
+    const badge = pctBadge(f);
+    const badgeHtml = badge ? `<span class="${badge.cls}">${esc(badge.text)}</span>` : "";
 
     item.innerHTML = `
-      <img class="file-thumb" src="${thumbSrc}" alt="" />
-      <div class="file-info">
-        <div class="file-name" title="${name}">${name}</div>
-        <div class="file-size">${f.savedBytes > 0 ? t("saved-bytes", { size: formatBytes(f.savedBytes) }) : translateBackendMessage(f.message) || ""}</div>
+      <div class="tile-thumb">
+        <img class="file-thumb" src="${thumbSrc}" alt="" />
+        ${badgeHtml}
       </div>
-      <span class="file-status status-${f.status}">${statusLabel(f.status)}</span>
+      <div class="file-meta">
+        <div class="file-name" title="${esc(name)}">${esc(name)}</div>
+        <div class="file-size">${esc(sizeLineText(f))}</div>
+        ${statusHtml(f)}
+      </div>
       ${retryBtn}
       ${deleteBtn}
     `;
@@ -337,6 +438,84 @@ function renderFiles() {
       });
     }
   }
+
+  updateFileSummary();
+  updateStatusbar();
+  updateStatusMeta();
+}
+
+// ─── 状态栏 / 列表摘要：只说真实状态 ─────────────────────────────────
+// 本仓发生过「幽灵状态」事故：状态文字必须与真实状态一致，数字只能
+// 来自真实计数（files 数组 / 后端 stats），禁止任何估算或假文案。
+
+function updateFileSummary() {
+  if (!fileSummary) return;
+  if (files.length === 0) { fileSummary.textContent = ""; return; }
+  const n = { todo: 0, done: 0, skip: 0, fail: 0 };
+  for (const f of files) {
+    // 目录行代表它展开出来的若干文件：按事件里的真实状态逐个计数，
+    // 否则摘要会与瓦片（1 个目录）对不上，也会与后端统计（展开后的总数）对不上。
+    const set = f.isFolder ? batchFolderFiles.get(f.path) : null;
+    if (set && set.size > 0) {
+      for (const p of set) {
+        const st = batchEventStatus.get(p);
+        if (st === "done") n.done++;
+        else if (st === "skipped") n.skip++;
+        else if (st === "failed") n.fail++;
+        else n.todo++;
+      }
+      continue;
+    }
+    if (f.status === "done") n.done++;
+    else if (f.status === "skipped") n.skip++;
+    else if (f.status === "failed") n.fail++;
+    else n.todo++;
+  }
+  const parts = [];
+  if (n.todo) parts.push(t("summary-todo", { n: n.todo }));
+  if (n.done) parts.push(t("summary-done", { n: n.done }));
+  if (n.skip) parts.push(t("summary-skip", { n: n.skip }));
+  if (n.fail) parts.push(t("summary-fail", { n: n.fail }));
+  fileSummary.textContent = parts.join(" · ");
+}
+
+function updateStatusbar() {
+  if (!statusText) return;
+  if (isConverting) {
+    const { done, total } = batchTerminalCount();
+    if (statusDot) statusDot.hidden = false;
+    statusText.textContent = t("statusbar-converting", { done, total });
+    return;
+  }
+  if (statusDot) statusDot.hidden = true;
+  if (files.length === 0) {
+    statusText.textContent = t("statusbar-idle");
+    return;
+  }
+  const allDone = files.every((f) => f.status === "done" || f.status === "skipped" || f.status === "failed");
+  if (allDone && stats) {
+    // 计数直接取统计面板上的真实值（updateStats 刚写入的），不二次计算
+    statusText.textContent = t("statusbar-done", {
+      ok: statSuccess ? statSuccess.textContent : "0",
+      skip: statSkip ? statSkip.textContent : "0",
+      fail: statFail ? statFail.textContent : "0",
+      saved: statSaved ? statSaved.textContent : "0 B",
+    });
+    return;
+  }
+  statusText.textContent = t("statusbar-ready", { n: files.length });
+}
+
+// 状态栏右侧等宽摘要：当前质量档 · 有损/无损 · 本机处理（全部是真实设置）
+function updateStatusMeta() {
+  if (!statusMeta) return;
+  const q = document.querySelector("#quality-pills .pill-btn.active");
+  const parts = [
+    q ? q.textContent.trim() : "",
+    chkLossless?.checked ? t("lossless") : t("lossy"),
+    t("statusbar-local"),
+  ];
+  statusMeta.textContent = parts.filter(Boolean).join(" · ");
 }
 
 function statusLabel(s) {
@@ -353,8 +532,25 @@ function statusLabel(s) {
 // ─── Update UI for file progress ────────────────────────────────────
 
 function updateFileProgress(filePath, status, message, savedBytes, savedPct, outputPath) {
+  // 后端 panic 时用空路径报失败（ERR_INTERNAL_PANIC），不对应任何文件
+  if (!filePath) return;
+  batchEventStatus.set(filePath, status);
   const f = files.find((x) => x.path === filePath);
-  if (!f) return;
+  if (!f) {
+    // 目录展开出来的文件：列表里没有它的瓦片，归到目录行上
+    const owner = folderOwnerOf(filePath);
+    if (owner) {
+      let set = batchFolderFiles.get(owner.path);
+      if (!set) { set = new Set(); batchFolderFiles.set(owner.path, set); }
+      set.add(filePath);
+      syncFolderRow(owner);
+      updateFolderRowDom(owner);
+    }
+    // 无论归属到哪一行，批次计数都要跟着走
+    updateProgress();
+    updateFileSummary();
+    return;
+  }
   f.status = status;
   f.message = message;
   f.savedBytes = savedBytes;
@@ -370,10 +566,19 @@ function updateFileProgress(filePath, status, message, savedBytes, savedPct, out
   }
   if (item) {
     const badge = item.querySelector(".file-status");
-    badge.className = `file-status status-${status}`;
-    badge.textContent = statusLabel(status);
+    badge.className = `file-status status-${status}` + (status === "converting" ? " busy" : "");
+    // 转换中：红点 + 文字一起出现（家族口径：红点旁永远有文字）
+    badge.innerHTML = status === "converting"
+      ? `<span class="dot-live" aria-hidden="true"></span>${statusLabel(status)}`
+      : statusLabel(status);
     const size = item.querySelector(".file-size");
-    size.textContent = savedBytes > 0 ? t("saved-bytes", { size: formatBytes(savedBytes) }) : translateBackendMessage(message) || "";
+    size.textContent = sizeLineText(f);
+    const pct = item.querySelector(".pct-badge");
+    const b = pctBadge(f);
+    if (pct) {
+      if (b) { pct.className = b.cls; pct.textContent = b.text; }
+      else pct.remove();
+    }
 
     // Auto-scroll to the file currently being processed
     if (status === "converting") {
@@ -381,9 +586,124 @@ function updateFileProgress(filePath, status, message, savedBytes, savedPct, out
     }
   }
   updateProgress();
+  // 摘要（待转 / 已完成 / 跳过 / 失败）跟着每个文件的状态走，
+  // 否则转换中途它一直停在初始计数
+  updateFileSummary();
 }
 
 let totalTasks = 0;
+// 当前批次：重试只跑其中一部分，进度与状态栏都按批次算，不按整张列表。
+// 此前 totalTasks 一直是整表长度，单文件重试时进度条会显示 "9/10" ——
+// 用户看到的是「几乎完成」，实际那个文件还在转。
+// 总数以后端 convert-total 事件为准（它知道自己要处理几个），批次路径由前端记，
+// 用来数「这一批里已经落定的有几个」。
+let batchPaths = [];
+
+// 批次台账：进度只认事件流，不认列表长度。
+// 目录会被后端展开成若干实际文件（collect_convert_files），展开后的路径
+// 不在列表里，目录行自己永远收不到事件 —— 此前目录行永远停在「待转换」，
+// 进度条也停在 0/N，整批看上去像卡死。
+// batchEventStatus: 路径 → 最后一次事件状态；batchFolderFiles: 目录 → 它展开出的文件。
+let batchEventStatus = new Map();
+let batchFolderFiles = new Map();
+// 批次是否被用户取消：取消时后端直接跳出循环，没开始的文件不会补发事件，
+// 目录行不能因此被当成「全部跑完」。
+let batchCancelled = false;
+
+function resetBatchLedger() {
+  batchEventStatus = new Map();
+  batchFolderFiles = new Map();
+  batchCancelled = false;
+}
+
+// 目录归属：展开出来的文件路径不在列表里，按路径前缀归到最贴切的目录行。
+function folderOwnerOf(filePath) {
+  const target = filePath.replace(/\\/g, "/");
+  let owner = null;
+  let best = -1;
+  for (const f of files) {
+    if (!f.isFolder) continue;
+    const prefix = f.path.replace(/\\/g, "/").replace(/\/+$/, "") + "/";
+    if (target.startsWith(prefix) && prefix.length > best) {
+      owner = f;
+      best = prefix.length;
+    }
+  }
+  return owner;
+}
+
+function isTerminalStatus(s) {
+  return s === "done" || s === "skipped" || s === "failed";
+}
+
+// 「点了取消」不等于「确实没跑完」：后端在文件间隙检查标志，
+// 若点下去时最后几个文件已经转完，整批其实完整落定了。
+function batchActuallyCancelled() {
+  if (!batchCancelled) return false;
+  if (totalTasks <= 0) return true;
+  let terminal = 0;
+  for (const s of batchEventStatus.values()) {
+    if (isTerminalStatus(s)) terminal++;
+  }
+  return terminal < totalTasks;
+}
+
+// 目录行的状态由它展开出来的文件推导；批次未结束前一律算「转换中」，
+// 因为剩下的文件还没开始，不能提前宣布完成。
+function syncFolderRow(owner) {
+  const set = batchFolderFiles.get(owner.path);
+  if (!set || set.size === 0) return;
+  const statuses = [...set].map((p) => batchEventStatus.get(p));
+  if (statuses.some((s) => s === "failed")) owner.status = "failed";
+  else if (isConverting) owner.status = "converting";
+  else if (statuses.every(isTerminalStatus)) owner.status = "done";
+}
+
+// 批次结束：目录行落账。一个事件都没有 = 后端没展开它
+// （递归没开，或目录里没有可转换的图片）。
+function finalizeFolderRows() {
+  const cancelled = batchActuallyCancelled();
+  for (const f of files) {
+    if (!f.isFolder) continue;
+    const set = batchFolderFiles.get(f.path);
+    if (!set || set.size === 0) {
+      if (cancelled) {
+        // 取消发生在轮到它之前：它还是待转，不是「没有可转换文件」
+        f.status = "pending";
+        f.folderNote = t("folder-cancelled");
+      } else {
+        f.status = "skipped";
+        f.folderNote = chkRecursive.checked ? t("folder-empty") : t("folder-recursion-off");
+      }
+      continue;
+    }
+    const statuses = [...set].map((p) => batchEventStatus.get(p));
+    const failedCount = statuses.filter((s) => s === "failed").length;
+    if (cancelled) {
+      // 与普通文件同口径：取消后回到待转队列。目录没转完，
+      // 不能宣布完成；「已处理 N 个」是事件里的真实计数。
+      f.status = "pending";
+      f.folderNote = t("folder-cancelled-partial", { n: set.size });
+      continue;
+    }
+    if (failedCount > 0) f.status = "failed";
+    else if (statuses.every((s) => s === "skipped")) f.status = "skipped";
+    else f.status = "done";
+    f.folderNote = failedCount > 0
+      ? t("folder-files-failed", { n: set.size, m: failedCount })
+      : t("folder-files", { n: set.size });
+  }
+}
+
+function batchTerminalCount() {
+  // 已落定的数量 = 事件流里到达终态的路径数（目录展开出来的也算）。
+  let done = 0;
+  for (const s of batchEventStatus.values()) {
+    if (isTerminalStatus(s)) done++;
+  }
+  const total = totalTasks > 0 ? totalTasks : (batchPaths.length || files.length);
+  return { done, total };
+}
 
 function updateProgress() {
   const container = document.getElementById("progress-bar-container");
@@ -391,8 +711,7 @@ function updateProgress() {
   const text = document.getElementById("progress-text");
   if (!container || !fill || !text) return;
   if (isConverting) {
-    const total = totalTasks > 0 ? totalTasks : files.length;
-    const done = files.filter(f => f.status === 'done' || f.status === 'skipped' || f.status === 'failed').length;
+    const { done, total } = batchTerminalCount();
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     container.hidden = false;
     fill.style.width = pct + "%";
@@ -401,6 +720,7 @@ function updateProgress() {
     container.hidden = true;
     fill.style.width = "0%";
   }
+  updateStatusbar();
 }
 
 // ─── Update stats ───────────────────────────────────────────────────
@@ -416,6 +736,7 @@ function updateStats(s) {
   statSkip.textContent = (b.skip_count || 0) + (s.skip_count || 0);
   statFail.textContent = (b.fail_count || 0) + (s.fail_count || 0);
   statSaved.textContent = formatBytes((b.saved || 0) + (s.saved || 0));
+  updateStatusbar();
 }
 
 // ─── Convert button state ───────────────────────────────────────────
@@ -456,9 +777,11 @@ let cancelPending = false;
 
 async function startConvert() {
   retryBase = null;
-  totalTasks = files.length;
   if (isConverting) return;
   cancelPending = false;
+  batchPaths = files.map((f) => f.path);
+  totalTasks = 0; // 后端 convert-total 事件会填上真实总数
+  resetBatchLedger();
 
   // P0-3: Confirm before deleting source files
   if (chkDelete.checked) {
@@ -478,6 +801,7 @@ async function startConvert() {
     f.message = "";
     f.savedBytes = 0;
     f.savedPct = 0;
+    f.folderNote = "";
   }
   renderFiles();
 
@@ -505,6 +829,7 @@ async function startConvert() {
     renderFiles();
     isConverting = false;
     updateConvertBtn();
+    updateStatusbar();
     // 试用过期被拦：弹激活对话框（不是裸错误）。Rust 同时会 emit license-expired，
     // 这里按错误码再判一次作双保险；openLicenseDialog 重复打开只会刷新内容。
     if (isLicenseExpiredError(e)) { openLicenseDialog(); return; }
@@ -545,6 +870,11 @@ async function retrySingleFile(path) {
   const f = files.find((x) => x.path === path);
   if (!f) return;
 
+  // 本批只有这一个文件：进度与状态栏按 1 个算，不按整张列表
+  batchPaths = [path];
+  totalTasks = 0;
+  resetBatchLedger();
+
   // Enter converting state so the button becomes "cancel" and concurrent starts are blocked
   isConverting = true;
   updateConvertBtn();
@@ -553,15 +883,19 @@ async function retrySingleFile(path) {
   f.message = "";
   f.savedBytes = 0;
   f.savedPct = 0;
+  f.folderNote = "";
   renderFiles();
 
-  const req = buildRequest([path], { recursive: false });
+  // 目录行要带递归重跑：不递归的话后端会直接跳过它（它不是文件），
+  // 点「重试」会什么都没发生。
+  const req = buildRequest([path], { recursive: !!f.isFolder });
   try {
     await invoke("start_convert", { request: req });
   } catch (e) {
     console.warn("Retry failed:", e);
     isConverting = false;
     updateConvertBtn();
+    updateStatusbar();
     if (isLicenseExpiredError(e)) { openLicenseDialog(); return; }
     alert(t("convert-failed") + ": " + translateBackendMessage(String(e)));
   }
@@ -575,24 +909,32 @@ async function retryAllFailed() {
   const failedFiles = files.filter((f) => f.status === "failed");
   if (failedFiles.length === 0) return;
 
+  batchPaths = failedFiles.map((f) => f.path);
+  totalTasks = 0;
+  resetBatchLedger();
+
   for (const f of failedFiles) {
     f.status = "pending";
     f.message = "";
     f.savedBytes = 0;
     f.savedPct = 0;
+    f.folderNote = "";
   }
   renderFiles();
 
   isConverting = true;
   updateConvertBtn();
 
-  const req = buildRequest(failedFiles.map((f) => f.path), { recursive: false });
+  // 递归打开：失败列表里可能有目录行（它代表展开后失败的那些文件），
+  // 不递归后端会跳过目录，重试等于没点。
+  const req = buildRequest(failedFiles.map((f) => f.path), { recursive: true });
   try {
     await invoke("start_convert", { request: req });
   } catch (e) {
     console.warn("Retry all failed:", e);
     isConverting = false;
     updateConvertBtn();
+    updateStatusbar();
     if (isLicenseExpiredError(e)) openLicenseDialog();
   }
 }
@@ -664,6 +1006,7 @@ function setQuality(v) {
   document.querySelectorAll("#quality-pills .pill-btn").forEach((b) => {
     b.classList.toggle("active", parseInt(b.dataset.q) === qualityValue);
   });
+  updateStatusMeta();
 }
 
 document.querySelectorAll("#quality-pills .pill-btn").forEach((b) => {
@@ -676,6 +1019,9 @@ chkRecursive.addEventListener("change", () => {
     if (hint) hint.hidden = true;
   }
 });
+
+// 无损开关影响状态栏的「有损/无损」摘要
+chkLossless?.addEventListener("change", updateStatusMeta);
 
 // Naming mode — pill buttons
 namingPills.querySelectorAll(".pill-btn").forEach((btn) => {
@@ -719,6 +1065,8 @@ convertBtn.addEventListener("click", () => {
   if (isConverting) {
     // latch：取消若赶在后端清零之前，startConvert 在 await 之后补发
     cancelPending = true;
+    // 批次被取消：目录行不能按「跑完了」结账（见 finalizeFolderRows）
+    batchCancelled = true;
     invoke("cancel_convert").catch((e) => console.warn("Cancel failed:", e));
   } else {
     startConvert();
@@ -791,6 +1139,9 @@ async function setupListeners() {
         f.savedPct = 0;
       }
     }
+    // 目录行落账：它自己收不到事件，状态由展开出来的文件推导。
+    // 不落账它就永远停在「待转换」——摘要与状态栏都会说假话。
+    finalizeFolderRows();
     renderFiles();
     updateStats(event.payload);
     updateConvertBtn();
