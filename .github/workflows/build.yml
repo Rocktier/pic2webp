@@ -5,6 +5,10 @@ on:
     branches: [main]
     tags: ['v*']
 
+# crates.io 直连偶发超时，留重试余量
+env:
+  CARGO_NET_RETRY: 10
+
 # 同一分支/tag 的新推送会取消旧的构建
 concurrency:
   group: build-${{ github.ref }}
@@ -44,30 +48,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup cargo mirror (China)
-        if: matrix.os == 'windows'
-        run: |
-          $dir = "$env:USERPROFILE\.cargo"
-          New-Item -ItemType Directory -Force $dir | Out-Null
-          @"
-          [source.crates-io]
-          replace-with = "tuna"
-          [source.tuna]
-          registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
-          "@ | Out-File -FilePath "$dir\config.toml" -Encoding utf8
-        shell: pwsh
-
-      - name: Setup cargo mirror (China)
-        if: matrix.os == 'macos'
-        run: |
-          mkdir -p ~/.cargo
-          cat > ~/.cargo/config.toml << 'EOF'
-          [source.crates-io]
-          replace-with = "tuna"
-          [source.tuna]
-          registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
-          EOF
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
