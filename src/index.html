@@ -478,7 +478,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ───────── 状态栏：说人话（设计稿 statusbar） ───────── */
 .statusbar {
-  height: 34px; flex-shrink: 0;
+  height: var(--statusbar-h); flex-shrink: 0;
   display: flex; align-items: center; gap: 10px;
   padding: 0 14px;
   border-top: 1px solid var(--border);
@@ -796,7 +796,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     </div>
 
     <!-- ===== 状态栏：说人话 —— 进行中带红点+文字，结束说结果 ===== -->
-    <footer class="statusbar">
+    <footer class="statusbar" role="status" aria-live="polite">
       <span class="dot-live" id="status-dot" hidden aria-hidden="true"></span>
       <span id="status-text">Drop images to get started</span>
       <span class="status-meta" id="status-meta"></span>
