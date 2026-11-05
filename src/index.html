@@ -206,6 +206,9 @@ header .logo, header .logo * { pointer-events: none; }
   flex: 1; overflow-y: auto; min-height: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  /* Chromium 在自动行高里按「缩略图高度为 0」算，行高只有半张瓦片（1280×800 实测
+     71.5px vs 瓦片 208px），图与文件名互相压叠。显式取内容高度才对得上。 */
+  grid-auto-rows: max-content;
   gap: 12px;
   align-content: start;
   align-items: start;

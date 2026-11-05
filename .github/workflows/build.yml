@@ -118,8 +118,10 @@ jobs:
       # 微软商店包：tauri-windows-bundle 读取 src-tauri/gen/windows/（清单模板 + 自有磁贴）
       - name: Build MSIX for Microsoft Store (Windows)
         if: matrix.os == 'windows'
-        # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
-        # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
+        # 商店渠道固定 ROCKTIER_CHANNEL=store：不开自研试用拦截（微软 10.8.2 / 10.8.4），
+        # Help 菜单也不出「检查更新 / 官方网站」。MSIX 只用于商店提交，直装走 NSIS/MSI。
+        env:
+          ROCKTIER_CHANNEL: store
         run: npm run tauri:windows:build
 
       # ──────────────────────────────────────────────

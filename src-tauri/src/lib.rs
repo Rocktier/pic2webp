@@ -148,6 +148,21 @@ async fn license_status() -> Result<LicenseInfo, String> {
     Ok(license_info())
 }
 
+/// 商店版（macOS 沙箱）首次启动的默认输出目录：`~/Pictures/Rocktier Pic2WebP`。
+///
+/// 沙箱只授权用户显式选中的对象，拖进来的文件写不回其父目录；图片类应用的通行
+/// 做法是给一个应用自有的落点（需 `com.apple.security.assets.pictures.read-write`）。
+/// 直链版返回 None，维持「与源文件同目录」；Windows 商店包是完整信任，也不改。
+#[tauri::command]
+fn store_default_output_dir(app: AppHandle) -> Option<String> {
+    if !(cfg!(target_os = "macos") && crate::license::channel() == "store") {
+        return None;
+    }
+    let dir = app.path().picture_dir().ok()?.join("Rocktier Pic2WebP");
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir.to_string_lossy().to_string())
+}
+
 /// 本机指纹，供前端在**激活时**上报给服务端做设备计数。
 ///
 /// 为什么单独开一个命令而不是让前端自己算：指纹要读注册表 / ioreg，
@@ -1317,6 +1332,7 @@ pub fn run() {
             check_disk_space, is_dir, generate_thumbnail, build_menu,
             report_machine_fingerprint,
             license_status, store_receipt, clear_receipt,
+            store_default_output_dir,
         ])
         // 冷启动竞态补发：Opened 事件可能落在「前端查询 initial_file 之后、
         // 监听器挂载之前」的空窗里。页面加载完成时若仍有待开文档，再补发一次 ——

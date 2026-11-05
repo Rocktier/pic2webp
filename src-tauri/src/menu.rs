@@ -121,17 +121,30 @@ pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         ],
     )?;
 
-    let help_menu = Submenu::with_items(
-        app,
-        l(tr8!("Help", "帮助", "ヘルプ", "도움말", "Hilfe", "Ayuda", "Ajuda", "مساعدة")),
-        true,
-        &[&update_i, &site_i],
-    )?;
+    // 商店渠道不出 Help 菜单：其中「检查更新」是应用外更新入口（Apple 2.4.5(vii)），
+    // 「官方网站」会把用户引向应用外购买（Apple 3.1.1 / 微软 10.8.2、10.8.4）。
+    // 直链渠道保持不变。
+    let help_menu = if crate::license::channel() == "direct" {
+        Some(Submenu::with_items(
+            app,
+            l(tr8!("Help", "帮助", "ヘルプ", "도움말", "Hilfe", "Ayuda", "Ajuda", "مساعدة")),
+            true,
+            &[&update_i, &site_i],
+        )?)
+    } else {
+        None
+    };
 
-    let menu = Menu::with_items(
-        app,
-        &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, &help_menu],
-    )?;
+    let menu = match help_menu.as_ref() {
+        Some(help) => Menu::with_items(
+            app,
+            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, help],
+        )?,
+        None => Menu::with_items(
+            app,
+            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu],
+        )?,
+    };
     app.set_menu(menu)?;
     Ok(())
 }

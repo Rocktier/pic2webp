@@ -381,16 +381,17 @@ function renderFiles() {
     const thumbTints = { jpg: 'rgba(120,120,128,0.22)', jpeg: 'rgba(120,120,128,0.22)', png: 'rgba(120,120,128,0.16)', webp: 'rgba(120,120,128,0.10)' };
     const thumbTint = thumbTints[ext] || 'rgba(120,120,128,0.13)';
     const thumbSrc = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="4" fill="' + thumbTint + '"/><text x="16" y="22" text-anchor="middle" fill="#8e8e93" font-size="11" font-weight="600">' + ext.toUpperCase() + '</text></svg>')}`;
+    // 缓存命中时直接把 data URL 当首帧写进 innerHTML —— 早先版本先查缓存再设
+    // `<img>`，但那一刻 innerHTML 还没写入，querySelector 必然拿到 null，
+    // 于是任何一次重渲染后缩略图都永久退回灰底扩展名占位符。
+    const cachedThumb = isTauri() ? thumbCache.get(f.path) : null;
     // Async load real thumbnail（并发上限 + 缓存去重：一次拖入几百张不再瞬时 N 个 invoke）
     // 2026-10-30 重构：列表改成瓦片网格后缩略图是主视觉，48px 拉到 ~200px 会糊，
     // 改取 320px（generate_thumbnail 按 box 缩放，后端不用动）。
-    if (isTauri()) {
-      const cached = thumbCache.get(f.path);
-      const thumbEl = () => item.querySelector(".file-thumb");
-      if (cached) { const el = thumbEl(); if (el) el.src = cached; }
-      else loadThumbnail(f.path,
-        (dataUrl) => { const el = thumbEl(); if (el) el.src = dataUrl; },
-        () => { const el = thumbEl(); if (el) el.style.opacity = "0.3"; }, 320);
+    if (isTauri() && !cachedThumb) {
+      loadThumbnail(f.path,
+        (dataUrl) => { const el = item.querySelector(".file-thumb"); if (el) el.src = dataUrl; },
+        () => { const el = item.querySelector(".file-thumb"); if (el) el.style.opacity = "0.3"; }, 320);
     }
 
     const retryBtn = f.status === "failed"
@@ -402,7 +403,7 @@ function renderFiles() {
 
     item.innerHTML = `
       <div class="tile-thumb">
-        <img class="file-thumb" src="${thumbSrc}" alt="" />
+        <img class="file-thumb" src="${cachedThumb || thumbSrc}" alt="" />
         ${badgeHtml}
       </div>
       <div class="file-meta">
@@ -1278,7 +1279,15 @@ async function init() {
   if (isTauri()) invoke("build_menu", { lang: getLang() }).catch(() => {});
 
   // 恢复上次的输出目录（目录后来被删掉也没关系：后端 create_dir_all 会建回来）
-  applyOutputDir(localStorage.getItem(OUTPUT_DIR_KEY) ?? localStorage.getItem(OUTPUT_DIR_KEY_LEGACY));
+  const savedOutputDir = localStorage.getItem(OUTPUT_DIR_KEY) ?? localStorage.getItem(OUTPUT_DIR_KEY_LEGACY);
+  applyOutputDir(savedOutputDir);
+  if (!savedOutputDir && isTauri()) {
+    // 商店版（macOS 沙箱）写不回源目录，改用 ~/Pictures/Rocktier Pic2WebP；
+    // 直链版与 Windows 商店包返回 null，保持「与源文件同目录」。
+    invoke("store_default_output_dir").then((dir) => {
+      if (dir && !selectedDir) applyOutputDir(dir);
+    }).catch(() => {});
+  }
 
   // First render so the empty-state guide toggle gets its click listener bound
   renderFiles();
