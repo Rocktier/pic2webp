@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Mac App Store 沙箱 entitlements —— 本文件只写「能力」，不写「身份」。
+
+  为什么身份项不在这里：
+    com.apple.application-identifier / com.apple.developer.team-identifier /
+    keychain-access-groups 三项的取值由描述文件决定，而描述文件是逐个产品、
+    逐个 Build 生成的。写死进模板 = 换产品就要改模板，且团队号/包名会漂移。
+    正确做法由 scripts/build-appstore.sh 从 .provisionprofile 里读出来后合并注入
+    （已实测：codesign 传 --entitlements 时**不会**自动从描述文件补这三项，
+    缺了它们 ASC 上传阶段会拒，而 codesign --verify 仍然是绿的 —— 只在
+    上传时才炸，所以必须由脚本显式注入 + 断言）。
+
+  与直发轨的区别（src-tauri/Entitlements.plist 是直发轨那套）：
+    直发轨要 allow-jit / disable-library-validation + hardened runtime；
+    MAS 轨**不要** hardened runtime，反过来必须开 app-sandbox。
+    两套不能混用，混了要么启动崩（沙箱缺失），要么 ASC 拒（携带直发权限）。
+
+  关于 assets.pictures.read-write：
+    刻意不加。本应用通过 NSOpenPanel / 拖放取文件，沙箱下这两条路径由
+    files.user-selected.read-write 授权即可覆盖；assets.pictures 是给「直接
+    遍历 ~/Pictures」用的，多要一项无障碍也用不上的权限只会给审核添问题。
+    若将来实测发现拖入 ~/Pictures 被拒，再在此追加：
+      <key>com.apple.security.assets.pictures.read-write</key><true/>
+-->
+<plist version="1.0">
+<dict>
+    <!-- 沙箱总开关。MAS 强制；缺了这一项 ASC 直接拒。 -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!-- 用户经打开面板/拖放选中的文件，可读可写（转换结果回写原目录需要写）。 -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!--
+      出站网络。当前直发版会访问 rocktier.com / api.github.com（授权校验与
+      版本查询），store 渠道下 enforced() 为 false 不拦试用，但代码路径仍在。
+      沙箱内不开此项时任何 socket 都会被内核拒绝。
+    -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>

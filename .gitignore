@@ -27,6 +27,10 @@ Thumbs.db
 *.msi
 *.app
 *.log
+# MAS 打包产物（scripts/build-appstore.sh 输出到 build/appstore/）
+*.pkg
+*.app.zip
+build/
 
 # ─── AI agent 工作文件（含个人信息，不提交）───
 findings.md
