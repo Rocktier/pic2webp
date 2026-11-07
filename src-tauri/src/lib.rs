@@ -21,6 +21,7 @@ use base64::Engine as _;
 /// 改动时两处必须同步。
 pub const APP_KEY: &str = "Rocktier.RocktierPic2WebP";
 
+pub mod heic;
 pub mod license;
 pub mod trial;
 
@@ -396,13 +397,9 @@ fn is_dir(path: String) -> Result<bool, String> {
 #[tauri::command]
 fn generate_thumbnail(path: String, size: Option<u32>) -> Result<String, String> {
     let sz = size.unwrap_or(48);
-    let img = ImageReader::open(&path)
-        .map_err(|e| format!("open_fail:{}", e))?
-        .with_guessed_format()
-        .map_err(|e| format!("format_fail:{}", e))?
-        .decode()
-        .map_err(|e| format!("decode_fail:{}", e))?;
-    let thumb = img.resize(sz, sz, image::imageops::FilterType::Lanczos3);
+    // 统一入口：HEIC/HEIF 走系统解码器，其余走 image crate。只改前端白名单
+    // 而漏掉这里，界面会是一片灰底占位（D-121 同型事故）。
+    let thumb = decode_image(Path::new(&path), Some(sz))?;
     let mut buf = Cursor::new(Vec::new());
     thumb.write_to(&mut buf, image::ImageFormat::WebP)
         .map_err(|e| format!("encode_fail:{}", e))?;
@@ -420,6 +417,29 @@ macro_rules! bail_and_unlock {
 }
 
 // ─── Image processing helpers ───────────────────────────────────────
+
+/// 图片解码的唯一入口。HEIC/HEIF 由 `heic.rs` 交给系统解码器，
+/// 其余格式仍走 image crate。`max_edge` 只用于缩略图，None = 原尺寸。
+///
+/// HEIC 的错误码（`heic_codec_missing` / `heic_decode_fail:*`）必须原样透传，
+/// 不要包成 `decode_fail:*` —— 前端要靠它区分「文件坏了」和「系统缺解码器」。
+fn decode_image(path: &Path, max_edge: Option<u32>) -> Result<image::DynamicImage, String> {
+    if heic::is_heic_path(path) {
+        return heic::decode(path, max_edge).map(image::DynamicImage::ImageRgba8);
+    }
+    let img = ImageReader::open(path)
+        .map_err(|e| format!("open_fail:{}", e))?
+        .with_guessed_format()
+        .map_err(|e| format!("format_fail:{}", e))?
+        .decode()
+        .map_err(|e| format!("decode_fail:{}", e))?;
+    match max_edge {
+        Some(n) if img.width() > n || img.height() > n => {
+            Ok(img.resize(n, n, image::imageops::FilterType::Lanczos3))
+        }
+        _ => Ok(img),
+    }
+}
 
 /// Apply resize to a DynamicImage
 fn apply_resize(img: image::DynamicImage, req: &ConvertRequest) -> image::DynamicImage {
@@ -494,7 +514,7 @@ fn encode_webp(img: &image::DynamicImage, quality: i32, lossless: bool) -> Resul
 // ─── File collection helper ──────────────────────────────────────────
 
 fn collect_convert_files(request: &ConvertRequest) -> Vec<String> {
-    let supported = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
+    let supported = SUPPORTED_EXTS;
     let mut files = Vec::new();
     for file in &request.files {
         let path = Path::new(file);
@@ -622,7 +642,11 @@ fn convert_single_file(
         let _ = app_handle.emit("convert-stats", stats.clone());
         return;
     }
-    let dims = ImageReader::open(&work_path).ok().and_then(|r| r.into_dimensions().ok());
+    let dims = if heic::is_heic_path(Path::new(&work_path)) {
+        heic::dimensions(Path::new(&work_path))
+    } else {
+        ImageReader::open(&work_path).ok().and_then(|r| r.into_dimensions().ok())
+    };
     if let Some((w, h)) = dims
         && w as u64 * h as u64 > 25_000_000
     {
@@ -632,97 +656,112 @@ fn convert_single_file(
             return;
     }
 
-    let reader = match ImageReader::open(&work_path)
-        .map_err(|e| format!("open_fail:{}", e))
-        .and_then(|r| r.with_guessed_format().map_err(|e| format!("open_fail:{}", e)))
-    {
-        Ok(r) => r,
-        Err(e) => {
-            stats.fail_count += 1;
-            emit_progress(app_handle, src_path, "failed", &e, 0, 0);
-            let _ = app_handle.emit("convert-stats", stats.clone());
-            return;
-        }
-    };
-
-    // 扩展名与实际内容不符 —— 真实世界极常见（微信 / 网页「另存为」、各类导出
-    // 工具都会产生），典型症状是「名为 .jpg 实为 PNG」，老版本按扩展名选解码器时
-    // 会报 `Illegal start bytes:8950` 这种**用户完全看不懂**的十六进制错误。
-    // 这里先把嗅探到的格式留档：万一后续解码仍失败（嗅探与解码器行为不一致、或
-    // 文件损坏），用它给出一条**可操作**的提示而不是裸错误串。
-    let sniffed_format = reader.format();
-
-    /// 把扩展名映射到 image 的格式枚举，供 mismatch 文案使用。
-    fn format_from_ext(ext: &str) -> Option<image::ImageFormat> {
-        match ext.to_ascii_lowercase().as_str() {
-            "jpg" | "jpeg" => Some(image::ImageFormat::Jpeg),
-            "png" => Some(image::ImageFormat::Png),
-            "webp" => Some(image::ImageFormat::WebP),
-            "gif" => Some(image::ImageFormat::Gif),
-            "bmp" => Some(image::ImageFormat::Bmp),
-            "tif" | "tiff" => Some(image::ImageFormat::Tiff),
-            _ => None,
-        }
-    }
-    /// 格式枚举 → 稳定的短名（不用 Debug 的 `Jpeg`/`Png`，与前端词表对齐）。
-    fn format_slug(f: image::ImageFormat) -> &'static str {
-        match f {
-            image::ImageFormat::Jpeg => "jpeg",
-            image::ImageFormat::Png => "png",
-            image::ImageFormat::WebP => "webp",
-            image::ImageFormat::Gif => "gif",
-            image::ImageFormat::Bmp => "bmp",
-            image::ImageFormat::Tiff => "tiff",
-            _ => "unknown",
-        }
-    }
-
-    // 解码失败时决定用哪条文案：扩展名与内容不符时给可操作提示，否则给原始错误。
-    let decode_error = |e: String| -> String {
-        let ext = work_path
-            .extension()
-            .and_then(|x| x.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        // 嗅探优先；嗅探为 None 时退回按扩展名判断（文件可能连头都读不出来）
-        let actual = sniffed_format.or_else(|| format_from_ext(&ext));
-        match actual {
-            Some(f) if format_from_ext(&ext).is_some_and(|x| x != f) => {
-                // 扩展名说 A、内容是 B —— 用户改个扩展名就能用，必须说清楚
-                format!(
-                    "ext_mismatch:{}:{}",
-                    format_slug(f),
-                    ext
-                )
+    // HEIC/HEIF 不走 image crate：系统解码器输出的 RgbaImage 已经按 EXIF
+    // 方向转正，这里绝不能再 apply_orientation()，否则竖拍照片会转两次。
+    let mut img = if heic::is_heic_path(Path::new(&work_path)) {
+        match heic::decode(Path::new(&work_path), None) {
+            Ok(rgba) => image::DynamicImage::ImageRgba8(rgba),
+            Err(e) => {
+                stats.fail_count += 1;
+                emit_progress(app_handle, src_path, "failed", &e, 0, 0);
+                let _ = app_handle.emit("convert-stats", stats.clone());
+                return;
             }
-            _ => format!("decode_fail:{e}"),
         }
-    };
-    // EXIF 方向：image 不会自动应用，必须手动，否则 iPhone 竖拍导出后全部横躺（P0-21）。
-    // 注意：image 0.25.5 的 ImageReader 没有 orientation() 方法（该方法 0.25.6+ 才有，
-    // 53a0086 引入的写法从未编译通过）。此处经由 into_decoder() 的 ImageDecoder trait
-    // 方法读取（无 EXIF 的格式返回默认 NoTransforms），再用 apply_orientation 校正。
-    let mut decoder = match reader.into_decoder().map_err(|e| decode_error(e.to_string())) {
-        Ok(d) => d,
-        Err(e) => {
-            stats.fail_count += 1;
-            emit_progress(app_handle, src_path, "failed", &e, 0, 0);
-            let _ = app_handle.emit("convert-stats", stats.clone());
-            return;
+    } else {
+        let reader = match ImageReader::open(&work_path)
+            .map_err(|e| format!("open_fail:{}", e))
+            .and_then(|r| r.with_guessed_format().map_err(|e| format!("open_fail:{}", e)))
+        {
+            Ok(r) => r,
+            Err(e) => {
+                stats.fail_count += 1;
+                emit_progress(app_handle, src_path, "failed", &e, 0, 0);
+                let _ = app_handle.emit("convert-stats", stats.clone());
+                return;
+            }
+        };
+
+        // 扩展名与实际内容不符 —— 真实世界极常见（微信 / 网页「另存为」、各类导出
+        // 工具都会产生），典型症状是「名为 .jpg 实为 PNG」，老版本按扩展名选解码器时
+        // 会报 `Illegal start bytes:8950` 这种**用户完全看不懂**的十六进制错误。
+        // 这里先把嗅探到的格式留档：万一后续解码仍失败（嗅探与解码器行为不一致、或
+        // 文件损坏），用它给出一条**可操作**的提示而不是裸错误串。
+        let sniffed_format = reader.format();
+
+        /// 把扩展名映射到 image 的格式枚举，供 mismatch 文案使用。
+        fn format_from_ext(ext: &str) -> Option<image::ImageFormat> {
+            match ext.to_ascii_lowercase().as_str() {
+                "jpg" | "jpeg" => Some(image::ImageFormat::Jpeg),
+                "png" => Some(image::ImageFormat::Png),
+                "webp" => Some(image::ImageFormat::WebP),
+                "gif" => Some(image::ImageFormat::Gif),
+                "bmp" => Some(image::ImageFormat::Bmp),
+                "tif" | "tiff" => Some(image::ImageFormat::Tiff),
+                _ => None,
+            }
         }
-    };
-    let orientation = image::ImageDecoder::orientation(&mut decoder)
-        .unwrap_or(image::metadata::Orientation::NoTransforms);
-    let mut img = match image::DynamicImage::from_decoder(decoder).map_err(|e| decode_error(e.to_string())) {
-        Ok(img) => img,
-        Err(e) => {
-            stats.fail_count += 1;
-            emit_progress(app_handle, src_path, "failed", &e, 0, 0);
-            let _ = app_handle.emit("convert-stats", stats.clone());
-            return;
+        /// 格式枚举 → 稳定的短名（不用 Debug 的 `Jpeg`/`Png`，与前端词表对齐）。
+        fn format_slug(f: image::ImageFormat) -> &'static str {
+            match f {
+                image::ImageFormat::Jpeg => "jpeg",
+                image::ImageFormat::Png => "png",
+                image::ImageFormat::WebP => "webp",
+                image::ImageFormat::Gif => "gif",
+                image::ImageFormat::Bmp => "bmp",
+                image::ImageFormat::Tiff => "tiff",
+                _ => "unknown",
+            }
         }
+
+        // 解码失败时决定用哪条文案：扩展名与内容不符时给可操作提示，否则给原始错误。
+        let decode_error = |e: String| -> String {
+            let ext = work_path
+                .extension()
+                .and_then(|x| x.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            // 嗅探优先；嗅探为 None 时退回按扩展名判断（文件可能连头都读不出来）
+            let actual = sniffed_format.or_else(|| format_from_ext(&ext));
+            match actual {
+                Some(f) if format_from_ext(&ext).is_some_and(|x| x != f) => {
+                    // 扩展名说 A、内容是 B —— 用户改个扩展名就能用，必须说清楚
+                    format!(
+                        "ext_mismatch:{}:{}",
+                        format_slug(f),
+                        ext
+                    )
+                }
+                _ => format!("decode_fail:{e}"),
+            }
+        };
+        // EXIF 方向：image 不会自动应用，必须手动，否则 iPhone 竖拍导出后全部横躺（P0-21）。
+        // 注意：image 0.25.5 的 ImageReader 没有 orientation() 方法（该方法 0.25.6+ 才有，
+        // 53a0086 引入的写法从未编译通过）。此处经由 into_decoder() 的 ImageDecoder trait
+        // 方法读取（无 EXIF 的格式返回默认 NoTransforms），再用 apply_orientation 校正。
+        let mut decoder = match reader.into_decoder().map_err(|e| decode_error(e.to_string())) {
+            Ok(d) => d,
+            Err(e) => {
+                stats.fail_count += 1;
+                emit_progress(app_handle, src_path, "failed", &e, 0, 0);
+                let _ = app_handle.emit("convert-stats", stats.clone());
+                return;
+            }
+        };
+        let orientation = image::ImageDecoder::orientation(&mut decoder)
+            .unwrap_or(image::metadata::Orientation::NoTransforms);
+        let mut img = match image::DynamicImage::from_decoder(decoder).map_err(|e| decode_error(e.to_string())) {
+            Ok(img) => img,
+            Err(e) => {
+                stats.fail_count += 1;
+                emit_progress(app_handle, src_path, "failed", &e, 0, 0);
+                let _ = app_handle.emit("convert-stats", stats.clone());
+                return;
+            }
+        };
+        img.apply_orientation(orientation);
+        img
     };
-    img.apply_orientation(orientation);
 
     // 解码是最大的单文件耗时点；取消赶在这里就不要再编码、更不要写盘。
     if cancel_flag.load(Ordering::Relaxed) { return; }
@@ -1134,7 +1173,7 @@ pub fn run_cli(args: &[String]) {
     }
     
     // Collect all files
-    let supported = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
+    let supported = SUPPORTED_EXTS;
     let mut all_files: Vec<String> = Vec::new();
     for f in &files {
         let path = Path::new(f);
@@ -1172,12 +1211,8 @@ pub fn run_cli(args: &[String]) {
         
         let original_size = std::fs::metadata(src).map(|m| m.len() as i64).unwrap_or(0);
         
-        // Decode
-        let img = match ImageReader::open(src)
-            .map_err(|e| format!("open_fail:{}", e))
-            .and_then(|r| r.with_guessed_format().map_err(|e| format!("format_fail:{}", e)))
-            .and_then(|r| r.decode().map_err(|e| format!("decode_fail:{}", e)))
-        {
+        // Decode —— 与主转换、缩略图共用同一个入口（HEIC 走系统解码器）。
+        let img = match decode_image(path, None) {
             Ok(img) => img,
             Err(e) => { eprintln!("  FAIL: {} — {}", src, e); fail += 1; continue; }
         };
@@ -1241,8 +1276,13 @@ pub struct InitialFile(Mutex<Option<String>>);
 /// setup 完成后再搬进 `InitialFile`。Chromium 的 `_startupComplete` 同款）。
 static PENDING_DOCS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-/// 与前端 SUPPORTED_EXTS 及文件选择器一致。
-const SUPPORTED_EXTS: [&str; 7] = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
+/// 后端所有「按扩展名收文件」的地方共用这一份（原来 collect / CLI /
+/// 冷启动文件关联各写一遍，`.tif` 在两份里都漏过；D-126 又查出 HEIC
+/// 会同时被这四处挡住）。前端 `src/formats.js` 是另一份单一来源，
+/// 两边必须逐字对齐，反向判据见 `tests/heic.test.mjs`。
+const SUPPORTED_EXTS: &[&str] = &[
+    "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
+];
 
 fn is_supported_path(path: &Path) -> bool {
     if !path.is_file() {

@@ -31,3 +31,16 @@ base64 = "0.22"
 fs2 = "0.4"
 # 授权回执的 Ed25519 离线验签（license.rs，FAMILY-LICENSE.md §2）
 ed25519-dalek = "2"
+
+# HEIC/HEIF（1.0.1）：Windows 走系统 WIC 解码器。windows crate 本来就是
+# Tauri 的传递依赖，这里只多开官方绑定的 feature —— 不引入任何解码实现，
+# 不随包分发 LGPL/GPL 的 HEVC 库（findings D-126）。macOS 侧用 ImageIO 的
+# 纯 C ABI，不需要任何 crate。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Imaging",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Variant",
+] }

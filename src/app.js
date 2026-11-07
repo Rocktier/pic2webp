@@ -141,18 +141,16 @@ async function addFiles(paths) {
   dropzone.classList.remove("empty");
 }
 
-// 在文件列表顶部显示一条临时提示：拖入了不支持的文件。
-// HEIC 单独说明——它是最常见的"为什么加不进来"（iPhone 默认格式），
-// 一句泛泛的"不支持"只会让用户反复重试。
+// 在文件列表顶部显示一条临时提示：拖入了白名单之外的文件。
+// 这里曾经给 HEIC 单独写「暂不支持，请先导出 JPG」——1.0.1 起 HEIC 由系统
+// 解码器支持，那条提示必须删干净，否则用户会被一句过期文案劝退。
+// 系统缺解码器时走的是转换失败路径（msg-heic-codec-missing），不在这里。
 function showUnsupportedHint(skipped) {
   const existing = document.getElementById("batch-warning");
   if (existing) existing.remove();
-  const heic = skipped.filter((p) => fileExt(p) === "heic" || fileExt(p) === "heif").length;
-  const others = skipped.length - heic;
-  let text = "";
-  if (heic > 0) text = t("unsupported-heic", { n: heic });
-  if (others > 0) text += (text ? " · " : "") + t("unsupported-dropped", { n: others });
-  if (!text) return;
+  const n = skipped.length;
+  if (!n) return;
+  const text = t("unsupported-dropped", { n });
   const warn = document.createElement("div");
   warn.id = "batch-warning";
   warn.className = "hint warn";

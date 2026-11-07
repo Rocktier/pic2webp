@@ -2602,6 +2602,7 @@ dependencies = [
  "walkdir",
  "webp",
  "which",
+ "windows",
 ]
 
 [[package]]

@@ -13,7 +13,7 @@ const dict = {
     "theme-mode-light": "Light",
     "theme-mode-dark": "Dark",
     "dropzone-text": "Drop images here",
-    "dropzone-hint": "or click to select · JPG / PNG / GIF / BMP / TIFF / WebP",
+    "dropzone-hint": "or click to select · JPG / PNG / GIF / BMP / TIFF / HEIC / WebP",
     "empty-hint": "Drop images here to start · WebP output, processed locally",
     "file-count": "{n} file(s) selected",
     "clear": "Clear",
@@ -91,7 +91,8 @@ const dict = {
     "confirm-close": "Conversion in progress. Are you sure you want to quit?",
     "confirm-delete": "Source files will be deleted after conversion. This cannot be undone. Continue?",
     "confirm-disk-space": "Only {free} free on the destination drive — this batch could need up to {need}. Continue anyway?",
-    "unsupported-heic": "{n} HEIC file(s) ignored — HEIC/HEIF is not supported; export as JPG first (Preview, Photos, …)",
+    "msg-heic-codec-missing": "HEIC needs a system decoder. On Windows, install HEIF Image Extensions and HEVC Video Extensions from Microsoft Store, then retry.",
+    "msg-heic-decode-fail": "HEIC decode failed: {e}",
     "retry-all": "Retry All Failed",
     "lossless": "Lossless",
     "advanced": "Advanced",
@@ -149,7 +150,7 @@ const dict = {
     "theme-mode-light": "浅色",
     "theme-mode-dark": "深色",
     "dropzone-text": "拖拽图片到此处",
-    "dropzone-hint": "或点击选择文件 · 支持 JPG / PNG / GIF / BMP / TIFF / WebP",
+    "dropzone-hint": "或点击选择文件 · 支持 JPG / PNG / GIF / BMP / TIFF / HEIC / WebP",
     "empty-hint": "拖入图片即可开始 · 输出 WebP，本地处理不上传",
     "file-count": "已选择 {n} 个文件",
     "clear": "清空",
@@ -224,7 +225,8 @@ const dict = {
     "confirm-close": "正在转换中，确定要退出吗？",
     "confirm-delete": "转换后将删除原始文件，此操作不可撤销。确定继续吗？",
     "confirm-disk-space": "目标磁盘仅剩 {free}，本批最多可能写入 {need}。仍要继续吗？",
-    "unsupported-heic": "已忽略 {n} 个 HEIC 文件——暂不支持 HEIC/HEIF（专利许可限制），请先在预览/照片中导出为 JPG",
+    "msg-heic-codec-missing": "HEIC 需要系统解码器。Windows 请到 Microsoft Store 安装「HEIF 图像扩展」与「HEVC 视频扩展」后重试",
+    "msg-heic-decode-fail": "HEIC 解码失败：{e}",
     "retry-all": "重试全部失败",
     "lossless": "无损",
     "advanced": "高级选项",
@@ -365,6 +367,9 @@ export function translateBackendMessage(message) {
     { regex: /^encode_fail:(.+)$/, key: "msg-encode-fail", extract: (m) => ({ e: m[1] }) },
     { regex: /^open_fail:(.+)$/, key: "msg-open-fail", extract: (m) => ({ e: m[1] }) },
     { regex: /^decode_fail:(.+)$/, key: "msg-decode-fail", extract: (m) => ({ e: m[1] }) },
+    // 系统解码器缺失 ≠ 文件损坏：必须给可操作的安装提示，别让用户反复重试。
+    { regex: /^heic_codec_missing(?::.*)?$/, key: "msg-heic-codec-missing" },
+    { regex: /^heic_decode_fail:(.+)$/, key: "msg-heic-decode-fail", extract: (m) => ({ e: m[1] }) },
     // 扩展名与实际内容不符（微信/网页「另存为」的典型产物：名为 .jpg 实为 PNG）。
     // 这类错误原先会漏出 `Illegal start bytes:8950` 这种十六进制，用户完全看不懂，
     // 也不知道「改个扩展名就能用」—— 所以给一条可操作的提示。

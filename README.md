@@ -4,7 +4,7 @@
 
 **图片转 WebP · $4.99 一次买断 · 本地处理 · 跨平台**
 
- JPG / PNG / WebP / AVIF → WebP，质量 75-85 通常比原图小 25-50%
+ JPG / PNG / TIFF / GIF / BMP / HEIC → WebP，质量 75-85 通常比原图小 25-50%
 
 [⬇️ 下载](https://github.com/Rocktier/pic2webp/releases) · [📖 文档](#开发--development) · [🐛 反馈](https://github.com/Rocktier/pic2webp/issues)
 
@@ -103,7 +103,7 @@ registry = "sparse+https://rsproxy.cn/index/"
 
 <div align="center">
 
-**JPG / PNG / WebP / AVIF → WebP converter · $4.99 one-time purchase · Local · Cross-platform**
+**JPG / PNG / TIFF / GIF / BMP / HEIC → WebP converter · $4.99 one-time purchase · Local · Cross-platform**
 
 Reduce image size by 25-50% at quality 75-85
 
@@ -149,6 +149,7 @@ Get the latest release from [Releases](https://github.com/Rocktier/pic2webp/rele
 - [Rust](https://rustup.rs/) 1.70+
 - [Node.js](https://nodejs.org/) 18+
 - Optional: [ffmpeg](https://ffmpeg.org/), needed only to turn an animated GIF into an animated WebP. Every other format works with no external tools
+- HEIC/HEIF uses the OS decoder (macOS ImageIO / Windows WIC), never a bundled HEVC codec. Windows needs the free HEIF Image Extensions and HEVC Video Extensions from Microsoft Store; macOS 10.13+ works out of the box
 
 ### Quick start
 
