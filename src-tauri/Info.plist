@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  App Store 提交所需的 Info.plist 增量（Tauri 会把它合并进自动生成的那份）。
+  依据与逐条理由见 docs/rocktier/macos-hig-checklist.md。
+-->
+<plist version="1.0">
+<dict>
+	<!--
+	  出口合规：声明本 app 不使用非豁免加密。
+	  事实依据：图片转换全在本地完成，无自有加密算法；联网只有向 rocktier.com
+	  查更新（标准 HTTPS）与许可证 Ed25519 验签，二者均属豁免范畴
+	  （仅使用系统/标准加密 + 仅用于身份验证）。
+	  作用：App Store Connect 不再为每个 build 弹「加密文稿」问卷
+	  （2026-11-06 首次提交时人工填过一遍，属可消除的重复劳动）。
+	  若将来引入自研加密（如 Journal 的 AES-GCM 落盘），本键必须改为 true。
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!-- App Store 必需项。与 App Store Connect 里所选主类别保持一致（图形与设计）。 -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.graphics-design</string>
+</dict>
+</plist>
