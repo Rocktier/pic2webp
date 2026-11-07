@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, ask } from "@tauri-apps/plugin-dialog";
-import { initLang, getLang, setLang, t, translateBackendMessage, getLanguages } from "./i18n.js";
+import { initLang, getLang, t, translateBackendMessage } from "./i18n.js";
 import { runUpdateCheck } from "./updates.js";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -60,7 +60,6 @@ const statSaved = $("#stat-saved");
 const inspImages = $("#insp-images");
 const inspSource = $("#insp-source");
 
-const langToggle = $("#lang-toggle");
 const themeToggle = $("#theme-toggle");
 const chkResize = $("#chk-resize");
 const resizeW = $("#resize-w");
@@ -1225,24 +1224,6 @@ async function setupListeners() {
   });
 }
 
-// ─── Language toggle ─────────────────────────────────────────────────
-
-function updateLangToggle() {
-  const lang = getLang();
-  const langs = getLanguages();
-  if (!langToggle) return;
-  // Only populate options once
-  if (langToggle.options.length === 0) {
-    langs.forEach((l) => {
-      const opt = document.createElement("option");
-      opt.value = l.code;
-      opt.textContent = l.label;
-      langToggle.appendChild(opt);
-    });
-  }
-  langToggle.value = lang;
-}
-
 // ── 主题：auto → light → dark 三态循环（家族 §6.5 唯一状态机）────────
 // 存储键沿用既有的 "rocktier.theme"：无值 = auto（跟随系统），light/dark 显式。
 // 改键会让老用户的主题偏好丢失，所以这里只扩值域、不换键。
@@ -1324,20 +1305,7 @@ const menuActions = {
 
 if (isTauri()) {
   listen("menu-action", (e) => menuActions[e.payload]?.()).catch(() => {});
-  // 菜单必须在 initLang() 之后构建，否则保存的语言偏好不生效（见 init()）
-}
-
-if (langToggle) {
-  langToggle.addEventListener("change", () => {
-    setLang(langToggle.value);
-    updateLangToggle();
-    if (isTauri()) invoke("build_menu", { lang: getLang() }).catch(() => {});
-    // Re-render file list to update dynamic text
-    renderFiles();
-    updateConvertBtn();
-    // 底栏路径摘要没有 data-i18n（自定义目录不该被语言切换覆盖），这里补一次
-    applyOutputDir(selectedDir);
-  });
+  // 菜单在 initLang() 之后构建，语言才与系统一致（见 init()）
 }
 
 // ─── 检查器 / ⋯ 菜单 / Dock 进度 ────────────────────────────────────
@@ -1447,8 +1415,7 @@ async function setDockProgress(percent) {
 
 async function init() {
   initLang();
-  updateLangToggle();
-  // 语言已就绪：此刻构建菜单才能用上用户保存的语言
+  // 语言已就绪（跟随系统）：此刻构建菜单才能用上同一门语言
   if (isTauri()) invoke("build_menu", { lang: getLang() }).catch(() => {});
 
   // 检查器默认收起：主界面只留质量、网格、主操作；上次开着的就还是开着

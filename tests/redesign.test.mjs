@@ -61,6 +61,7 @@ test("已移除的旧控件不得在界面里复活", () => {
     "dropzone",        // → 拖放走窗口级事件，整窗都是投放区
     "stats-panel",     // → 检查器 · Batch
     "file-list-header",
+    "lang-toggle",     // → 语言改由系统决定（Apple HIG：语言归系统管）
   ];
   const survivors = removed.filter((id) => html.includes(`id="${id}"`));
   assert.deepEqual(survivors, [], `这些旧控件还在 index.html 里: ${survivors.join(", ")}`);
@@ -73,7 +74,7 @@ test("经典控件在新壳里都在位", () => {
     "progress-bar-fill", "progress-text", "path-btn", "path-text",
     "inspector", "inspector-btn", "chk-resize", "resize-w", "resize-h",
     "resize-mode", "stat-saved", "stat-success", "stat-skip", "stat-fail",
-    "retry-all-btn", "status-text", "status-meta", "lang-toggle", "theme-toggle",
+    "retry-all-btn", "status-text", "status-meta", "theme-toggle",
     "ql-overlay", "ql-image",
   ];
   const declared = declaredIds();
@@ -150,4 +151,33 @@ test("app.js 里 t(\"…\") 用到的每个键都在字典里", () => {
   const used = new Set([...app.matchAll(/\bt\("([a-zA-Z0-9_.-]+)"/g)].map((m) => m[1]));
   const missing = [...used].filter((k) => !en.includes(`"${k}":`));
   assert.deepEqual(missing, [], `这些键在 en 字典里不存在: ${missing.join(", ")}`);
+});
+
+// ─── 语言：跟随系统，工具栏不放选择器（2026-11-07 用户拍板）─────────
+//
+// 判据存在的理由：删掉切换控件却留着半年前存下的 `rocktier.lang`，
+// 会造出一个用户再也改不回来的孤儿偏好 —— 界面看着像「跟随系统」，
+// 实际被 localStorage 钉死。这类错没有报错，只能靠契约盯。
+
+test("标题栏不得再有语言选择器", () => {
+  assert.ok(!html.includes('id="lang-toggle"'), "index.html 里还有语言下拉");
+  const cssCode = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.ok(!/\.lang-toggle\s*\{/.test(cssCode), "macos.css 里还给语言下拉留着样式");
+  const leftovers = ["langToggle", "updateLangToggle", "getLanguages"]
+    .filter((name) => new RegExp(`\\b${name}\\b`).test(app));
+  assert.deepEqual(leftovers, [], `app.js 里还有语言选择器的接线: ${leftovers.join(", ")}`);
+});
+
+test("界面语言由系统决定，不再读应用内保存的手动偏好", async () => {
+  const m = await import("../src/i18n.js");
+  assert.equal(typeof m.detectSystemLang, "function",
+    "i18n.js 必须导出 detectSystemLang（纯函数，零依赖可验收）");
+  assert.equal(m.detectSystemLang(["zh-CN", "en-US"]), "zh");
+  assert.equal(m.detectSystemLang(["zh-TW"]), "zh", "繁体区暂回退简体中文词条");
+  assert.equal(m.detectSystemLang(["en-US", "zh-CN"]), "en");
+  assert.equal(m.detectSystemLang(["ja-JP", "en-US"]), "en", "按偏好顺序落到第一个支持语种");
+  assert.equal(m.detectSystemLang([]), "en", "取不到系统语言时回落家族默认英文");
+  const body = i18n.slice(i18n.indexOf("export function initLang"), i18n.indexOf("export function getLang"));
+  assert.ok(!/getItem\(\s*["']rocktier\.lang/.test(body),
+    "initLang 不得再读 rocktier.lang，否则旧偏好会变成删不掉的孤儿状态");
 });

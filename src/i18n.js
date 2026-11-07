@@ -316,25 +316,50 @@ let currentLang = "en";
 
 // ─── Public API ─────────────────────────────────────────────────────
 
+/**
+ * 系统语言 → 家族支持语种（en / zh）。
+ *
+ * 2026-11-07 用户拍板：界面语言跟随系统，工具栏不再放语言选择器
+ * （Apple HIG：语言归系统管）。zh-* 一律落到简体 zh —— 繁体区
+ * （zh-HK / zh-TW）暂用简体词条，将来补齐 zh-Hant 再分叉。
+ * 按偏好顺序取第一个支持的语种：ja-JP, en-US → en；取不到 → 家族默认 en。
+ *
+ * 允许传数组是为了能零依赖验收；不传时读 navigator.languages。
+ */
+export function detectSystemLang(list) {
+  const tags = Array.isArray(list)
+    ? list
+    : ((typeof navigator !== "undefined" && navigator.languages?.length)
+      ? navigator.languages
+      : [(typeof navigator !== "undefined" && navigator.language) || "en"]);
+  for (const tag of tags) {
+    if (typeof tag !== "string") continue;
+    if (/^zh\b/i.test(tag)) return "zh";
+    if (/^en\b/i.test(tag)) return "en";
+  }
+  return "en";
+}
+
 export function getLanguages() {
   return LANGUAGES;
 }
 
 export function initLang() {
-  const saved = localStorage.getItem("rocktier.lang");
-  const codes = LANGUAGES.map((l) => l.code);
-  // 家族约定：无保存偏好时默认英文，不跟随系统语言
-  currentLang = codes.includes(saved) ? saved : "en";
+  // ⚠️ 不再读 localStorage 里的 `rocktier.lang`：切换控件删掉之后，
+  // 半年前存下的 zh 会变成用户再也改不回来的孤儿偏好。旧键不主动删
+  // （用户数据不动），只是从此不参与语言决策。
+  currentLang = detectSystemLang();
   applyLang();
 }
 
 export function getLang() { return currentLang; }
 
+/** 保留给未来的显式覆盖入口（调试 / 偏好设置）；当前无 UI 调用方，
+ *  且不再落盘 —— 免得又造出一个与系统语言打架的持久化状态。 */
 export function setLang(code) {
   const codes = LANGUAGES.map((l) => l.code);
   if (codes.includes(code)) {
     currentLang = code;
-    localStorage.setItem("rocktier.lang", currentLang);
     applyLang();
   }
 }
@@ -343,7 +368,6 @@ export function toggleLang() {
   const codes = LANGUAGES.map((l) => l.code);
   const idx = codes.indexOf(currentLang);
   currentLang = codes[(idx + 1) % codes.length];
-  localStorage.setItem("rocktier.lang", currentLang);
   applyLang();
   return currentLang;
 }

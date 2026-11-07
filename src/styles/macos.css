@@ -256,16 +256,6 @@ button:focus-visible, select:focus-visible, input:focus-visible,
 .tb-btn[data-mode="light"] .moon { display: block; }
 .tb-btn[data-mode="dark"] .sun { display: block; }
 
-/* 语言切换：家族原语 .lang-toggle 收窄到 22pt 高 */
-.lang-toggle {
-  height: 22px;
-  font-size: 11px;
-  padding: 0 20px 0 7px;
-  border-radius: var(--radius-sm);
-  background-position: right 6px center;
-  background-size: 6px;
-}
-
 /* ───────── 工作区 ───────── */
 .workspace {
   display: flex;
