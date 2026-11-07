@@ -61,6 +61,11 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
+      # 判据必须在 CI 里也跑：本机 npm test 全绿说明不了 CI 有这道闸
+      # （D-90 同型）。HEIC 的反向判据就挂在 tests/heic.test.mjs。
+      - name: Frontend contract tests
+        run: npm test
+
       # ──────────────────────────────────────────────
       #  macOS: 构建 + 签名（有证书则 Developer ID + 公证，否则 ad-hoc）
       # ──────────────────────────────────────────────
