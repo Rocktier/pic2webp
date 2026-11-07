@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="./styles/tokens.css" />
-
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rocktier Pic2WebP</title>
   <link rel="icon" type="image/png" sizes="256x256" href="/favicon.png" />
   <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <!-- 顺序不能换：母版快照在前（L0 真源），macOS 数值层在后覆盖。 -->
+  <link rel="stylesheet" href="./styles/tokens.css" />
+  <link rel="stylesheet" href="./styles/macos.css" />
   <link rel="stylesheet" href="./fonts.css" />
   <script>
     // 主题必须在第一帧样式解析前定好：三态默认值是 auto（跟随系统），
@@ -25,790 +26,168 @@
       }
     })();
   </script>
-  <style>
-/* 字体声明已移至 ./fonts.css（内联写法依赖 Vite 的 html-proxy 重写，换构建方式会静默丢字体） */
-
-
-/* ═══════════ ROCKTIER UI · Pic2WebP · 2026-10-30 界面重构 ═══════════
-   设计稿：Rocktier-UI-2026-10-30/04-pic2webp.html
-   口径：界面退成灰，颜色留给照片本身；每张图右下角一枚 −N% 是用户唯一
-   想知道的事；主操作只有一个（右栏底部「转换」，位置固定）；状态栏说人话。
-
-   颜色一律走家族令牌（styles/tokens.css，:root=深色 / [data-theme="light"]），
-   本文件不再自备一套变量 —— 写死色值会同时破坏深浅两档。 */
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body {
-  height: 100%;
-  font: 13px/1.55 var(--font);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  user-select: none;
-  overflow: hidden;
-}
-::selection { background: var(--selection); }
-
-#app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-/* ───────── 顶栏：产品名 + 一句话自述（设计稿 topbar） ───────── */
-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 52px;
-  padding: 0 16px 0 20px;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
-  flex-shrink: 0;
-}
-.logo { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.logo-text { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.logo-text h1 {
-  font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
-  white-space: nowrap; display: flex; align-items: center; gap: 8px;
-}
-/* 家族红点（品牌签名，与官网字标句点同位）。形状/动画唯一来源是
-   母版 tokens.css 的 .dot-live / @keyframes dotpulse —— 8px、3s 呼吸。 */
-.brand-mark { width: 26px; height: 26px; flex-shrink: 0; }
-.brand-mark .brand-tile { fill: #0a0a0a; stroke: var(--border-hover); stroke-width: 1; }
-.brand-mark .brand-letters { fill: #ffffff; font-family: var(--font); }
-.brand-mark .brand-pip { fill: var(--red); }
-.brand-mark .brand-badge { fill: #ffffff; }
-.subtitle {
-  font-size: 12px; font-weight: 450; color: var(--text-tertiary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-.header-controls {
-  margin-left: auto;
-  display: flex; align-items: center; gap: 6px;
-  -webkit-app-region: no-drag;
-}
-/* 头部拖拽区：属性在 header 本身；logo 区文字对事件放行（右侧交互控件不受影响） */
-header .logo, header .logo * { pointer-events: none; }
-
-/* 三态图标互斥：auto 显示「屏幕」，light 显示月牙，dark 显示太阳
-   （.icon-btn 基础样式在母版 tokens.css；这里只管三个 svg 的显隐） */
-.icon-btn .sun, .icon-btn .moon, .icon-btn .monitor { display: none; }
-.icon-btn[data-mode="auto"] .monitor { display: block; }
-.icon-btn[data-mode="light"] .moon { display: block; }
-.icon-btn[data-mode="dark"] .sun { display: block; }
-
-/* ───────── 主区双栏：左 = 照片本身，右 = 输出设置（设计稿 body/rail） ───────── */
-.main-layout {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(240px, 30vw, 288px);
-  min-height: 0;
-}
-.left-panel {
-  display: flex; flex-direction: column; gap: 12px;
-  padding: 16px 18px 12px; min-width: 0;
-  overflow: hidden;
-}
-.right-panel {
-  display: flex; flex-direction: column; gap: 14px;
-  padding: 16px 14px 14px;
-  border-left: 1px solid var(--border);
-  background: var(--bg-secondary);
-  /* 主操作不进滚动区。此前整栏 overflow-y:auto，展开 Advanced 后「开始转换」被
-     推到视口下方，而家族铁律是任何情况下不出现滚动条（见 Compressor styles.css:55），
-     于是用户既看不见按钮、也看不见「还能往下滚」的暗示 —— 症状是「这软件没有导出」。 */
-  overflow: hidden;
-  min-height: 0;
-}
-.panel-scroll {
-  display: flex; flex-direction: column; gap: 14px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto; overflow-x: hidden;
-}
-.panel-scroll { scrollbar-width: none; }
-.panel-scroll::-webkit-scrollbar { display: none; }
-
-/* ───────── 拖放区：一条虚线横幅（设计稿 dropbar），空态放大成主视觉 ───────── */
-.dropzone {
-  position: relative;
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px;
-  border: 1.5px dashed var(--border-hover);
-  border-radius: 10px;
-  background: var(--bg-card);
-  cursor: pointer;
-  overflow: hidden;
-  flex-shrink: 0;
-  transition: background-color var(--dur-hover) var(--ease),
-              border-color var(--dur-hover) var(--ease);
-}
-.dropzone::before {
-  content: "";
-  position: absolute; inset: 0;
-  background-image: radial-gradient(var(--dot) 1px, transparent 1.6px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(70% 70% at 50% 45%, #000 30%, transparent 78%);
-          mask-image: radial-gradient(70% 70% at 50% 45%, #000 30%, transparent 78%);
-  opacity: 0.18;
-  pointer-events: none;
-}
-.dropzone-content {
-  position: relative; z-index: 1;
-  display: flex; align-items: center; gap: 12px; min-width: 0;
-}
-.dropzone-icon { display: flex; flex: none; color: var(--text-secondary); }
-.dropzone-icon svg { width: 22px; height: 22px; }
-.dropzone-copy { min-width: 0; }
-.dropzone-text { font-size: 13px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; }
-.dropzone-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
-.dropzone:hover, .dropzone.dragover {
-  border-color: var(--accent);
-  background: var(--bg-card-hover);
-}
-
-/* 空态：拖放区放大成主区第一眼（家族口径「3 秒说出这软件干什么」） */
-@keyframes borderBreath {
-  0%, 100% { border-color: var(--border); }
-  50% { border-color: var(--border-hover); }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .dropzone.empty {
-    flex: 1;
-    min-height: 220px;
-    animation: borderBreath 3s ease-in-out infinite;
-  }
-  .dropzone.empty .dropzone-icon svg { width: 44px; height: 44px; }
-}
-.dropzone.empty { align-items: center; justify-content: center; }
-.dropzone.empty .dropzone-content { flex-direction: column; text-align: center; }
-
-/* ───────── 列表头：n 个文件 · 状态摘要（设计稿 sheet-head） ───────── */
-.file-list-header {
-  display: flex; align-items: baseline; gap: 10px;
-  padding: 0 2px; flex-shrink: 0; min-width: 0;
-}
-#file-count-text { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
-#file-summary {
-  font-size: 12px; color: var(--text-tertiary);
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.file-list-actions { margin-left: auto; display: flex; gap: 2px; flex: none; }
-
-/* ───────── 文件列表：瓦片网格，颜色留给缩略图本身 ───────── */
-.file-list {
-  flex: 1; overflow-y: auto; min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
-  /* Chromium 在自动行高里按「缩略图高度为 0」算，行高只有半张瓦片（1280×800 实测
-     71.5px vs 瓦片 208px），图与文件名互相压叠。显式取内容高度才对得上。 */
-  grid-auto-rows: max-content;
-  gap: 12px;
-  align-content: start;
-  align-items: start;
-  padding: 0 2px 6px;
-  scrollbar-width: thin;
-}
-.file-item {
-  position: relative;
-  display: flex; flex-direction: column; min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-card);
-  overflow: hidden;
-  transition: border-color var(--dur-hover) var(--ease);
-}
-.file-item:hover { border-color: var(--border-hover); }
-.tile-thumb {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  background: var(--bg-card-hover);
-  overflow: hidden;
-}
-.file-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* 每片一枚角标：完成后是 −N%（真实 saved_pct），进行中/待转是中性灰。
-   徽标底用前景令牌反转 —— 两个主题都压得住照片，不写死色值。 */
-.pct-badge {
-  position: absolute; right: 8px; bottom: 8px; z-index: 1;
-  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  padding: 1px 5px; border-radius: 4px;
-  background: var(--text-primary); color: var(--bg-primary);
-}
-.pct-badge.muted { background: color-mix(in srgb, var(--text-primary) 45%, transparent); }
-.file-meta { padding: 8px 10px 9px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.file-name {
-  font-size: 12px; font-weight: 500; color: var(--text-primary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.file-size {
-  font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.file-status { font-size: 11px; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
-.file-status.busy { color: var(--text-primary); }
-.status-done { color: var(--text-secondary); }
-.status-skipped { color: var(--text-tertiary); }
-.status-failed { color: var(--danger); }
-
-/* 行内操作：单文件重试 / 移除，悬停或键盘聚焦时浮现 */
-.retry-btn, .file-delete-btn {
-  position: absolute; top: 6px; z-index: 2;
-  border: none; background: var(--bg-primary); color: var(--text-secondary);
-  cursor: pointer; font-size: 13px; line-height: 1;
-  padding: 3px 7px; border-radius: 7px;
-  opacity: 0; transition: opacity var(--dur-fast) linear;
-  box-shadow: 0 1px 4px var(--shadow);
-}
-.retry-btn { right: 32px; }
-.file-delete-btn { right: 6px; }
-.file-item:hover .retry-btn, .file-item:hover .file-delete-btn,
-.file-item:focus-within .retry-btn, .file-item:focus-within .file-delete-btn { opacity: 1; }
-.retry-btn:hover { color: var(--text-primary); }
-.file-delete-btn:hover { color: var(--danger); }
-
-/* 空态提示卡 */
-.empty-state {
-  grid-column: 1 / -1;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-card);
-  padding: 14px 20px 16px;
-}
-.empty-state p { font-weight: 600; font-size: 12px; letter-spacing: -0.01em; color: var(--text-secondary); }
-
-/* 顶部临时警告（不支持的格式 / 大文件 / 大批量） */
-.hint { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
-.hint.warn {
-  flex-shrink: 0;
-  color: var(--danger); background: var(--bg-card); padding: 5px 9px;
-  border-radius: 8px; border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
-}
-
-/* ───────── 右栏：输出质量（首屏唯一设置） ───────── */
-.panel-section { display: flex; flex-direction: column; gap: 8px; }
-.section-label { font-size: 12px; font-weight: 550; color: var(--text-secondary); }
-.quality-header { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; }
-.quality-value {
-  font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-.note { font-size: 11.5px; line-height: 1.6; color: var(--text-tertiary); }
-
-/* 分段控件：三档质量（设计稿 .seg） */
-.pill-group { display: flex; gap: 4px; flex-wrap: wrap; }
-.pill-btn {
-  padding: 4px 8px; min-height: 26px;
-  border: 1px solid var(--border); border-radius: 7px;
-  background: var(--bg-card); color: var(--text-secondary);
-  font-size: 11px; font-weight: 500; cursor: pointer; text-align: center;
-  white-space: nowrap; font-family: var(--font);
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.pill-btn:hover { background: var(--bg-card-hover); border-color: var(--border-hover); color: var(--text-primary); }
-.pill-btn.active, .pill-btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-#quality-pills {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
-  background: var(--bg-card); border: 1px solid var(--border-hover);
-  border-radius: 8px; padding: 3px;
-}
-#quality-pills .pill-btn {
-  border: 0; background: transparent; border-radius: 6px;
-  min-height: 28px; padding: 0 4px; font-size: 12px; color: var(--text-secondary);
-  width: auto;
-}
-#quality-pills .pill-btn:hover { background: var(--bg-card-hover); }
-#quality-pills .pill-btn.active { background: var(--accent); color: var(--on-accent); font-weight: 500; }
-
-/* Toggle —— 36×20，checked 变 accent */
-.toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; min-height: 20px; color: var(--text-secondary); }
-.toggle-row input { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); opacity: 0; }
-.toggle-track {
-  width: 36px; height: 20px; background: var(--border-hover); border-radius: var(--radius-pill);
-  position: relative; transition: background .25s; flex-shrink: 0;
-}
-.toggle-row input:checked + .toggle-track { background: var(--accent); }
-.toggle-thumb {
-  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-  background: var(--on-accent); border-radius: 50%;
-  transition: transform .25s var(--ease); box-shadow: 0 1px 3px var(--shadow);
-}
-.toggle-row input:checked + .toggle-track .toggle-thumb { transform: translateX(16px); }
-.toggle-row input:focus-visible + .toggle-track { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* mini-toggle（复选框） */
-.mini-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); cursor: pointer; min-height: 24px; }
-.mini-toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
-
-/* ───────── 高级选项：原生 <details> 折叠 ───────── */
-.advanced-details { border-top: 1px solid var(--border); padding-top: 6px; }
-.advanced-summary {
-  display: flex; align-items: center; justify-content: space-between;
-  list-style: none; cursor: pointer; min-height: 24px; border-radius: 6px;
-}
-.advanced-summary::-webkit-details-marker { display: none; }
-.advanced-summary:hover .section-label { color: var(--text-primary); }
-.advanced-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.advanced-chevron { width: 10px; height: 10px; color: var(--text-tertiary); transition: transform .2s; flex-shrink: 0; }
-.advanced-details[open] .advanced-chevron { transform: rotate(180deg); }
-.advanced-body { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
-.advanced-group { display: flex; flex-direction: column; gap: 4px; }
-#naming-pills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
-#naming-pills .pill-btn { width: 100%; }
-
-.dir-row { display: flex; gap: 6px; align-items: center; }
-.dir-input {
-  flex: 1; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 4px 8px; font-size: 11px; background: var(--bg-card); color: var(--text-secondary);
-  font-family: var(--font-mono); cursor: default; min-height: 24px;
-}
-#dir-pills .pill-btn { flex: 1; }
-.divider { border: none; border-top: 1px solid var(--border); margin: 0; opacity: .7; flex-shrink: 0; }
-
-.advanced-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.advanced-row label { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
-.advanced-row input[type="number"], .advanced-row input[type="text"], .advanced-row select {
-  padding: 4px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--bg-card); color: var(--text-primary); font-family: var(--font-mono);
-  min-height: 24px; box-sizing: border-box;
-}
-.advanced-row input[type="number"] { width: 62px; }
-.advanced-row input[type="text"] { width: 124px; }
-.advanced-row select { font-family: var(--font); }
-.resize-dims { display: inline-flex; align-items: center; gap: 6px; }
-
-/* ───────── 统计（设计稿 total：一枚大数字 + 一行小字） ───────── */
-.stats-panel { display: flex; flex-direction: column; gap: 6px; }
-.stats-panel[hidden] { display: none; }
-.stats-panel.pulse { animation: statsPulse 1s ease; }
-@keyframes statsPulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
-.stat-saved { display: flex; align-items: baseline; gap: 8px; }
-.stat-saved-val {
-  font-family: var(--font-mono); font-size: 24px; letter-spacing: -0.02em;
-  color: var(--text-primary); font-variant-numeric: tabular-nums;
-}
-.stat-saved-lbl { font-size: 11.5px; color: var(--text-tertiary); }
-.stats-row { display: flex; align-items: baseline; gap: 14px; }
-.stat-item { display: flex; align-items: baseline; gap: 4px; }
-.stat-num { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.stat-num.stat-fail { color: var(--danger); }
-.stat-lbl { font-size: 11px; color: var(--text-tertiary); }
-.stats-row-bottom { display: flex; align-items: center; }
-.retry-all {
-  padding: 2px 8px; font-size: 10px; white-space: nowrap; color: var(--danger);
-  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
-  border-radius: var(--radius-pill); background: none;
-}
-.retry-all:hover { background: var(--bg-card-hover); }
-
-/* ───────── 按钮 ───────── */
-button:focus-visible, .pill-btn:focus-visible, .lang-toggle:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px;
-}
-button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* Spinner（备用：btn-spinner 目前恒隐，保留样式防回归） */
-.spinner {
-  width: 14px; height: 14px; flex: none;
-  border: 2px solid color-mix(in srgb, var(--on-accent) 30%, transparent);
-  border-top-color: var(--on-accent); border-radius: 50%;
-  animation: spin .6s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-#convert-btn { margin-top: auto; flex-shrink: 0; }
-.btn-primary {
-  width: 100%; min-width: 140px; padding: 9px;
-  border: none; border-radius: var(--radius-sm);
-  background: var(--accent); color: var(--on-accent);
-  font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 7px;
-  letter-spacing: 0.01em;
-}
-.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
-.btn-primary:active:not(:disabled) { transform: scale(var(--press-scale)); }
-.btn-primary:disabled { opacity: .4; cursor: not-allowed; }
-/* 取消态：转换进行中唯一按钮变成危险动作（红 = 危险，不是行动色） */
-.btn-primary.cancel-mode { background: var(--danger); color: var(--on-brand); }
-.btn-secondary {
-  padding: 6px 12px; min-height: 28px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--bg-card); font-size: 11px; font-weight: 500; cursor: pointer; color: var(--text-primary);
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.btn-secondary:hover { background: var(--bg-card-hover); border-color: var(--border-hover); }
-
-.btn-text {
-  border: none; background: none; color: var(--text-secondary); cursor: pointer;
-  font-size: 11px; font-weight: 500; padding: 5px 8px; border-radius: 8px;
-  min-height: 24px; box-sizing: border-box;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.btn-text:hover { color: var(--text-primary); background: var(--bg-card-hover); }
-
-/* ───────── 语言切换 ───────── */
-.lang-toggle {
-  font-size: 10px; font-weight: 500; padding: 3px 20px 3px 9px; border-radius: var(--radius-pill);
-  background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
-  cursor: pointer; flex-shrink: 0; outline: none; appearance: none;
-  min-height: 24px; box-sizing: border-box;
-  -webkit-appearance: none; -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0l4 6 4-6z' fill='rgba(127,127,127,0.7)'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 6px center; background-size: 6px;
-  transition: all .2s;
-}
-.lang-toggle:hover { border-color: var(--border-hover); }
-.lang-toggle option { font-size: 11px; color: var(--text-primary); background: var(--bg-primary); }
-
-/* ───────── 批量进度 ───────── */
-.progress-bar-container {
-  padding: 2px 0 0; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
-}
-.progress-bar-container[hidden] { display: none; }
-.progress-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-.progress-bar-fill { height: 100%; background: var(--text-secondary); width: 0%; transition: width .3s ease; }
-.progress-text {
-  font-size: 11px; font-weight: 600; color: var(--text-secondary);
-  font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap;
-}
-
-/* ───────── 状态栏：说人话（设计稿 statusbar） ───────── */
-.statusbar {
-  height: var(--statusbar-h); flex-shrink: 0;
-  display: flex; align-items: center; gap: 10px;
-  padding: 0 14px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
-  font-size: 12px; color: var(--text-secondary);
-}
-.statusbar .dot-live[hidden] { display: none; }
-.statusbar .status-meta {
-  margin-left: auto;
-  font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* ───────── 滚动条 ───────── */
-.file-list::-webkit-scrollbar { width: 5px; }
-.file-list::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
-.file-list::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
-.file-list::-webkit-scrollbar-track { background: transparent; }
-
-  /* ───────── 许可胶囊 + 激活对话框（家族 L6，逻辑在 license.js） ─────────
-     许可徽标样式唯一来源是母版 tokens.css 的 .badge-license（恒用 --danger，
-     min 24×24 命中区）。本地只保留对话框结构样式，文案与行为都不在这里。 */
-
-  .license-overlay {
-    position: fixed; inset: 0; z-index: 1100; /* 与更新对话框同层，互斥出现 */
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  }
-  .license-overlay[hidden] { display: none; }
-  .license-dialog {
-    width: min(400px, calc(100vw - 48px));
-    max-height: min(520px, calc(100vh - 48px));
-    overflow-y: auto;
-    background: var(--bg-secondary); border: 1px solid var(--border-hover);
-    border-radius: var(--radius-md); box-shadow: 0 18px 50px var(--shadow);
-    display: flex; flex-direction: column;
-  }
-  .license-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 0; }
-  .license-header h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-  .license-close {
-    border: none; background: none; color: var(--text-tertiary); cursor: pointer;
-    font-size: 18px; line-height: 1; padding: 2px 8px; border-radius: 8px;
-  }
-  .license-close:hover { color: var(--text-primary); background: var(--bg-card-hover); }
-  .license-body { padding: 10px 16px 4px; display: flex; flex-direction: column; gap: 8px; }
-  .license-body p { font-size: 12px; color: var(--text-primary); line-height: 1.6; }
-  .license-body small { font-size: 11px; color: var(--text-tertiary); line-height: 1.55; display: block; }
-  .license-body .license-error { color: var(--danger); }
-  /* 吊销通告（B1）： revoked 标记见 license.js openLicenseDialog 调用点。 */
-  .license-body .license-revoked-notice { border: 1px solid var(--danger); border-radius: 8px; padding: 8px 10px; color: var(--danger); }
-  .license-body .license-revoked-notice small { color: inherit; }
-  .license-field { display: flex; flex-direction: column; gap: 5px; }
-  .license-field label { font-size: 11px; color: var(--text-secondary); font-weight: 500; }
-  .license-field input {
-    border: 1px solid var(--border-hover); border-radius: var(--radius-sm);
-    padding: 8px 10px; font-size: 12px; background: var(--bg-card);
-    color: var(--text-primary); font-family: var(--font-mono);
-  }
-  .license-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .license-footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px 14px; flex-wrap: wrap; }
-  /* 复用既有 .btn-primary / .btn-secondary，只在对话框里收紧尺寸；
-     margin-inline-start 使激活钮在 RTL（阿语）下也靠右 */
-  .license-footer .btn-primary { width: auto; padding: 6px 16px; font-size: 12px; margin-inline-start: auto; min-width: 0; }
-  .license-footer .btn-secondary { min-height: 30px; }
-
-
-  /* ── 检查更新对话框（入口：帮助菜单「检查更新…」）────────────────────
-     点击才联网：启动时、工作中、后台都不检查，见 updates.js 头注。
-     结构照 .license-overlay 系列，z-index 对齐。 */
-  .update-overlay {
-    position: fixed; inset: 0; z-index: 1100;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  }
-  .update-overlay[hidden] { display: none; }
-  .update-dialog {
-    width: min(400px, calc(100vw - 48px));
-    max-height: min(520px, calc(100vh - 48px));
-    overflow-y: auto;
-    background: var(--bg-secondary); border: 1px solid var(--border-hover);
-    border-radius: var(--radius-md); box-shadow: 0 18px 50px var(--shadow);
-    display: flex; flex-direction: column;
-  }
-  .update-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 0; }
-  .update-header h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-  .update-close {
-    border: none; background: none; color: var(--text-tertiary); cursor: pointer;
-    font-size: 18px; line-height: 1; padding: 2px 8px; border-radius: 8px;
-  }
-  .update-close:hover { color: var(--text-primary); background: var(--bg-card-hover); }
-  .update-body { padding: 10px 16px 4px; display: flex; flex-direction: column; gap: 8px; }
-  .update-body p { font-size: 12px; color: var(--text-primary); line-height: 1.6; }
-  .update-body small { font-size: 11px; color: var(--text-tertiary); line-height: 1.55; display: block; }
-  .update-footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px 14px; flex-wrap: wrap; }
-  .update-footer-spacer { flex: 1; }
-  .update-footer button {
-    min-height: 30px; padding: 6px 14px; font-size: 12px;
-    border: 1px solid var(--border-hover); border-radius: var(--radius-sm);
-    background: var(--bg-card); color: var(--text-primary); cursor: pointer;
-  }
-  .update-footer button:hover { border-color: var(--accent); }
-  /* 「获取 v…」主按钮：有新版时唯一需要用户点的动作，用 accent 让它显眼。 */
-  .update-footer button.update-get-btn {
-    background: var(--accent); border-color: transparent; color: var(--bg); font-weight: 600;
-  }
-</style>
 </head>
 
 <!-- ══════════════════════════════════════════════════════════════
      ↓↓↓ 界面本体（body）↓↓
-     本段是 UI 的全部结构：#app 容器、顶栏、拖放区、瓦片列表、
-     右栏设置、状态栏，以及两个 ES module 入口（/app.js 与 /updates.js）。
-
-     ⚠️ 2026-10-21（v1.9.14, commit f5297b5）事故记录：
-     那次提交本意只是把「检查更新」入口收进菜单，却顺手把整个 body
-     连同两个 module 入口（app.js / updates.js）一起删掉了 —— 结果应用
-     能开窗、但页面全白（v1.9.14 / v1.9.15 的 macOS 与 Windows 包全部如此）。
-     vite 构建照样成功（产物里只剩 index.html + 字体 + CSS，一个 JS 都没有），
-     CI 全绿，于是发了两版才发现。
-
-     2026-10-30 界面重构（设计稿 04-pic2webp.html）改写了本段结构，
-     但 app.js / license.js 依赖的全部 DOM id 一一保留（改动前后做过
-     差集核对）。改动本段前务必确认：
+     ⚠️ 2026-10-21（v1.9.14, commit f5297b5）事故记录：那次提交本意只是把
+     「检查更新」收进菜单，却顺手把整个 body 连同两个 module 入口一起删掉，
+     结果应用能开窗、页面全白，vite 照样构建成功、CI 全绿，发了两版才发现。
+     改动本段前务必确认：
        ① body 的开闭标签成对存在
        ② app.js 与 updates.js 两个 module 入口仍在
-     家族闸门已加 frontend-entry-integrity 规则把关这两条。
-     ══════════════════════════════════════════════════════════════
--->
+     家族闸门 frontend-entry-integrity 会盯这两条。
+
+     2026-11-07 重设计（Apple 桌面规范）改写了整段结构：
+     拖放横幅整个移除 —— 拖放走的是窗口级 `tauri://drag-drop`，
+     不是绑在某个元素上的，所以整窗天然就是投放区。
+     旧控件去向见 findings D-123。
+     ══════════════════════════════════════════════════════════════ -->
 <body>
   <div id="app">
-    <!-- ===== 顶栏：产品名 + 一句话自述；许可 / 主题 / 语言 ===== -->
-    <header data-tauri-drag-region>
-      <div class="logo">
-        <img class="brand-mark" src="/favicon.png" alt="" width="26" height="26" />
-        <div class="logo-text">
-          <h1>Rocktier Pic2WebP<span class="dot-live" aria-hidden="true"></span></h1>
-          <span class="subtitle" data-i18n="subtitle">Images to WebP · processed locally</span>
-        </div>
+
+    <!-- ===== 标题栏：交通灯浮在左侧 84pt，标题居中，红点在标题旁 ===== -->
+    <header class="titlebar" data-tauri-drag-region>
+      <div class="tb-left">
+        <!-- 质量：唯一高频参数，做成一个系统下拉，不再三颗药丸 -->
+        <select class="quality-menu" id="quality-menu" aria-label="Output quality">
+          <option value="60" data-i18n="small-file">Smaller</option>
+          <option value="80" selected data-i18n="q-balanced">Balanced</option>
+          <option value="95" data-i18n="high-quality">Better</option>
+          <option value="lossless" data-i18n="lossless">Lossless</option>
+        </select>
       </div>
-      <div class="header-controls">
-          <button class="badge-license" id="license-pill" hidden></button>
-          <button aria-label="Theme" class="icon-btn" id="theme-toggle" data-mode="auto"
-                  data-i18n-aria="themeBtn" title="Theme">
-            <svg class="monitor" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8M12 17v3.5"/></svg>
-            <svg class="sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-            <svg class="moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
-          </button>
-          <select class="lang-toggle" id="lang-toggle"></select>
-          </div>
+
+      <div class="tb-center">
+        <h1 id="app-title">Rocktier Pic2WebP</h1>
+        <!-- 红点三档：待机静态 / 转换中呼吸 / 完成收束。语义见 macos.css .dot-live -->
+        <span class="dot-live idle" id="status-dot" aria-hidden="true"></span>
+      </div>
+
+      <div class="tb-right">
+        <button class="badge-license" id="license-pill" hidden></button>
+        <button class="tb-btn" id="theme-toggle" data-mode="auto"
+                data-i18n-aria="themeBtn" aria-label="Theme" title="Theme">
+          <svg class="monitor" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8M12 17v3.5"/></svg>
+          <svg class="sun" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="moon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+        </button>
+        <select class="lang-toggle" id="lang-toggle" aria-label="Language"></select>
+        <button class="tb-btn" id="inspector-btn" aria-pressed="false"
+                aria-label="Inspector" title="Inspector ⌥⌘I">
+          <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M9.5 2.5v11"/></svg>
+        </button>
+        <button class="tb-btn" id="more-btn" aria-label="More" title="More">
+          <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><circle cx="3" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="13" cy="8" r="1.3"/></svg>
+        </button>
+      </div>
     </header>
 
-    <!-- ===== 主区双栏：左 = 照片，右 = 设置 ===== -->
-    <div class="main-layout">
-      <!-- ===== 左：拖放横幅 + 瓦片列表 ===== -->
-      <section class="left-panel">
-        <!-- Drop zone -->
-        <div aria-label="Drop images here" id="dropzone" class="dropzone" role="button" tabindex="0" data-i18n-aria="dropzone-text">
-          <div class="dropzone-content">
-            <div class="dropzone-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 16V4m0 0L8 8m4-4 4 4"/>
-                <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
-              </svg>
-            </div>
-            <div class="dropzone-copy">
-              <p class="dropzone-text" data-i18n="dropzone-text">Drop images here</p>
-              <p class="dropzone-hint" data-i18n="dropzone-hint">or click to select · JPG / PNG / GIF / BMP / TIFF / WebP</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- 列表头：n 个文件 · 状态摘要 + 添加文件夹 / 清空（次级操作） -->
-        <div class="file-list-header">
+    <!-- ===== 主区：左网格 + 右检查器 ===== -->
+    <div class="workspace">
+      <section class="grid-area" id="grid-area">
+        <div class="list-head">
           <span id="file-count-text" data-i18n="file-count" data-i18n-params='{"n":0}'>0 file(s) selected</span>
           <span id="file-summary"></span>
-          <span class="file-list-actions"><button id="folder-btn" class="btn-text" data-i18n="select-folder" title="Scan a folder and add its images (subfolders follow the recursion toggle)">Add Folder…</button><button id="clear-btn" class="btn-text" hidden data-i18n="clear">Clear</button></span>
+          <span class="list-actions">
+            <button id="folder-btn" class="link-btn" data-i18n="select-folder"
+                    title="Scan a folder and add its images">Add Folder…</button>
+            <button id="clear-btn" class="link-btn" hidden data-i18n="clear">Clear</button>
+          </span>
         </div>
         <div class="hint warn" id="folder-hint" hidden data-i18n="folder-hint">Folder detected but subdirectory recursion is off. Enable "Include subdirectories" to process images inside.</div>
+
         <div id="file-list" class="file-list">
           <div class="empty-state" id="empty-state">
-            <p class="empty-hint" data-i18n="empty-hint">Drop images here to start · WebP output, processed locally</p>
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="3"/>
+                <circle cx="8.5" cy="8.5" r="1.6"/>
+                <path d="M21 15l-5-5-9 9"/>
+              </svg>
+            </div>
+            <p data-i18n="empty-hint">Drop images here to start · WebP output, processed locally</p>
+            <small data-i18n="dropzone-hint">or click to select · JPG / PNG / GIF / BMP / TIFF / WebP</small>
           </div>
         </div>
       </section>
 
-      <!-- ===== 右：输出设置 + 统计 + 唯一主操作 ===== -->
-      <section class="right-panel">
-        <!-- 滚动区只包设置内容：主操作留在滚动区之外，永远在视线内 -->
-        <div class="panel-scroll">
-          <!-- Quality —— 首屏唯一设置项：三档预设（设计稿 seg 分段控件） -->
-          <div class="panel-section">
-            <div class="quality-header">
-              <span class="section-label" data-i18n="output-quality">Output Quality</span>
-              <span class="quality-value" id="quality-val">80</span>
-            </div>
-            <div class="pill-group" id="quality-pills">
-              <button class="pill-btn" data-q="60" data-i18n="small-file">Smaller</button>
-              <button class="pill-btn active" data-q="80" data-i18n="q-balanced">Balanced</button>
-              <button class="pill-btn" data-q="95" data-i18n="high-quality">Better</button>
-            </div>
-            <p class="note" id="quality-note" data-i18n="quality-note">Balanced is about quality 80. Turn on Lossless for a pixel-perfect copy.</p>
+      <!-- ===== 检查器：只放「当前这批」的属性，不放任务偏好 ===== -->
+      <aside class="inspector" id="inspector" hidden>
+        <div class="insp-section">
+          <div class="insp-title" data-i18n="section-size">Size</div>
+          <label class="check">
+            <input type="checkbox" id="chk-resize" />
+            <span class="box"></span>
+            <span data-i18n="resize">Resize</span>
+          </label>
+          <div class="insp-row">
+            <span class="label" data-i18n="resize-width">W</span>
+            <input type="number" id="resize-w" class="field grow" placeholder="1920" min="1" max="20000" aria-label="Resize width in pixels" />
+            <span class="label" style="width:auto" data-i18n="resize-height">H</span>
+            <input type="number" id="resize-h" class="field grow" placeholder="auto" min="0" max="20000" aria-label="Resize height in pixels" />
           </div>
-
-          <!-- 其余设置一律收进 Advanced，默认折叠（原生 details，键盘可达） -->
-          <details class="advanced-details" id="advanced-details">
-            <summary class="advanced-summary">
-              <span class="section-label" data-i18n="advanced">Advanced</span>
-              <svg class="advanced-chevron" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l3 3 3-3"/></svg>
-            </summary>
-            <div class="advanced-body">
-              <label class="toggle-row">
-                <input type="checkbox" id="chk-lossless" />
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                <span data-i18n="lossless">Lossless</span>
-              </label>
-              <label class="toggle-row">
-                <input type="checkbox" id="chk-recursive" />
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                <span data-i18n="recursive">Include subdirectories</span>
-              </label>
-              <label class="toggle-row">
-                <input type="checkbox" id="chk-delete" />
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                <span data-i18n="delete-source">Delete source</span>
-              </label>
-              <label class="toggle-row">
-                <input type="checkbox" id="chk-structure" />
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                <span data-i18n="preserve-structure">Preserve folder structure</span>
-              </label>
-
-              <div class="advanced-group">
-                <span class="section-label" data-i18n="naming-rule">Naming</span>
-                <div class="pill-group" id="naming-pills">
-                  <button class="pill-btn" data-value="overwrite" data-i18n="overwrite">Overwrite</button>
-                  <button class="pill-btn active" data-value="webp-suffix">-webp</button>
-                  <button class="pill-btn" data-value="q-suffix">-q80</button>
-                  <button class="pill-btn" data-value="ts-suffix" data-i18n="timestamp">Timestamp</button>
-                </div>
-                <div class="hint warn" id="overwrite-warning" hidden data-i18n="overwrite-warn">Existing .webp files will be overwritten, cannot be undone</div>
-              </div>
-
-              <div class="advanced-group">
-                <span class="section-label" data-i18n="output-dir">Output Directory</span>
-                <div class="dir-row">
-                  <input type="text" id="output-dir" class="dir-input" readonly placeholder="Same as source" data-i18n-placeholder="same-dir" />
-                  <button id="dir-clear" class="btn-text" hidden>&#x2715;</button>
-                </div>
-                <div class="pill-group" id="dir-pills">
-                  <button id="dir-btn" class="pill-btn primary" data-i18n="select">Browse</button>
-                </div>
-              </div>
-
-              <div class="advanced-row">
-                <label class="mini-toggle"><input type="checkbox" id="chk-resize" /><span data-i18n="resize">Resize</span></label>
-                <span class="resize-dims">
-                  <label data-i18n="resize-width">W</label>
-                  <input type="number" id="resize-w" placeholder="1920" min="1" max="20000" aria-label="Resize width in pixels" />
-                  <label data-i18n="resize-height">H</label>
-                  <input type="number" id="resize-h" placeholder="auto" min="0" max="20000" aria-label="Resize height in pixels" />
-                </span>
-                <select id="resize-mode" aria-label="Resize mode">
-                  <option value="fit" data-i18n="resize-fit">Fit</option>
-                  <option value="fill" data-i18n="resize-fill">Fill</option>
-                  <option value="shrink" data-i18n="resize-shrink">Shrink only</option>
-                </select>
-              </div>
-            </div>
-          </details>
-
-          <!-- Separator -->
-          <hr class="divider" />
-
-          <!-- Stats — 设计稿 total：一枚省下的大数字 + 一行小字计数 -->
-          <div class="stats-panel" id="stats-panel" hidden>
-            <div class="stat-saved">
-              <span class="stat-saved-val" id="stat-saved">—</span>
-              <span class="stat-saved-lbl" data-i18n="saved">Saved</span>
-            </div>
-            <div class="stats-row">
-              <div class="stat-item">
-                <span class="stat-num" id="stat-success">0</span>
-                <span class="stat-lbl" data-i18n="success">Done</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-num" id="stat-skip">0</span>
-                <span class="stat-lbl" data-i18n="skip">Skip</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-num stat-fail" id="stat-fail">0</span>
-                <span class="stat-lbl" data-i18n="fail">Failed</span>
-              </div>
-            </div>
-            <div class="stats-row-bottom">
-              <button id="retry-all-btn" class="btn-text retry-all" hidden data-i18n="retry-all">Retry All Failed</button>
-            </div>
-          </div>
-
-          <!-- Conversion progress（P0-19：此前对应 DOM 缺失，进度条永不渲染） -->
-          <div id="progress-bar-container" class="progress-bar-container" hidden>
-            <div class="progress-bar"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
-            <span id="progress-text" class="progress-text"></span>
-          </div>
-
+          <select class="popup" id="resize-mode" aria-label="Resize mode" style="width:100%">
+            <option value="fit" data-i18n="resize-fit">Fit</option>
+            <option value="fill" data-i18n="resize-fill">Fill</option>
+            <option value="shrink" data-i18n="resize-shrink">Shrink only</option>
+          </select>
         </div>
 
-        <!-- 主操作只有一个：转换 / 取消。刻意留在 .panel-scroll 之外 —— 滚动的是上面的
-             设置区，按钮本身不随滚动离开视口（事故口径见 .right-panel 注释）。 -->
-        <button id="convert-btn" class="btn-primary" disabled>
-          <span id="btn-text" data-i18n="start-convert">Convert</span>
-          <span id="btn-spinner" class="spinner" hidden></span>
-        </button>
-      </section>
+        <div class="insp-divider"></div>
+
+        <div class="insp-section">
+          <div class="insp-title" data-i18n="section-batch">Batch</div>
+          <div class="kv"><span class="k" data-i18n="section-images">Images</span><span class="v" id="insp-images">0</span></div>
+          <div class="kv"><span class="k" data-i18n="section-source">Source</span><span class="v" id="insp-source">—</span></div>
+          <div class="kv"><span class="k" data-i18n="saved">Saved</span><span class="v" id="stat-saved">—</span></div>
+          <div class="kv"><span class="k" data-i18n="success">Done</span><span class="v" id="stat-success">0</span></div>
+          <div class="kv"><span class="k" data-i18n="skip">Skip</span><span class="v" id="stat-skip">0</span></div>
+          <div class="kv"><span class="k" data-i18n="fail">Failed</span><span class="v" id="stat-fail">0</span></div>
+          <button id="retry-all-btn" class="btn-secondary" hidden data-i18n="retry-all">Retry All Failed</button>
+        </div>
+      </aside>
     </div>
 
-    <!-- ===== 状态栏：说人话 —— 进行中带红点+文字，结束说结果 ===== -->
-    <footer class="statusbar" role="status" aria-live="polite">
-      <span class="dot-live" id="status-dot" hidden aria-hidden="true"></span>
-      <span id="status-text">Drop images to get started</span>
-      <span class="status-meta" id="status-meta"></span>
+    <!-- ===== 底栏：说人话的状态 + 输出位置 + 唯一主操作 ===== -->
+    <footer class="bottombar">
+      <div class="bb-status">
+        <div class="bb-line">
+          <span id="status-text">Drop images to get started</span>
+          <span id="status-meta"></span>
+        </div>
+        <div id="progress-bar-container" class="progress-bar-container" hidden>
+          <div class="progress-bar"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
+          <span id="progress-text"></span>
+        </div>
+      </div>
+
+      <!-- 输出位置：可点的路径摘要，点开就是目录选择框 -->
+      <button class="path-btn" id="path-btn" title="Choose output folder">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1.5 4.5a1.5 1.5 0 0 1 1.5-1.5h3l1.5 2h6a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5z"/></svg>
+        <span class="path-text" id="path-text">Same as source</span>
+      </button>
+
+      <button id="convert-btn" class="btn-primary" disabled>
+        <span id="btn-text" data-i18n="start-convert">Convert</span>
+        <span id="btn-spinner" class="spinner" hidden></span>
+      </button>
     </footer>
+
+    <!-- ===== 空格预览浮层（纯前端，不依赖系统 Quick Look） ===== -->
+    <div class="ql-overlay" id="ql-overlay" hidden role="dialog" aria-modal="true" aria-label="Preview">
+      <div class="ql-frame" id="ql-frame">
+        <img id="ql-image" alt="" />
+        <div class="ql-caption">
+          <span id="ql-name"></span>
+          <span class="ql-meta" id="ql-meta"></span>
+        </div>
+      </div>
+    </div>
 
   </div>
 
   <script type="module" src="/app.js"></script>
   <script type="module" src="/updates.js"></script>
 </body>
-
 </html>

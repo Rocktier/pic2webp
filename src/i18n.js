@@ -34,6 +34,18 @@ const dict = {
     "fail": "Failed",
     "saved": "Saved",
     "start-convert": "Convert",
+    /* 2026-11-07 重设计（Apple 桌面规范）新增。按钮文案带数量与结果，
+       让「按下去会发生什么」不用去列表里数；检查器与 ⋯ 菜单各自成组。 */
+    "convert-n": "Convert {n} Image(s)",
+    "add-images": "Add images",
+    "confirm-recursive": "This folder has subfolders. Convert the images inside them too?",
+    "mi-clear-all": "Clear All",
+    "mi-include-subfolders": "Include Subfolders",
+    "mi-remove-originals": "Remove Originals After Convert",
+    "section-size": "Size",
+    "section-batch": "Batch",
+    "section-images": "Images",
+    "section-source": "Source",
     /* 2026-10-30 状态栏 / 瓦片重构新增：见 app.js updateStatusbar / updateFileSummary /
        pctBadge / updateStatusMeta。数字只来自真实计数，不编造。 */
     "statusbar-idle": "Drop images to get started — everything is processed on this device",
@@ -63,7 +75,7 @@ const dict = {
     "batch-warn": "{n} files loaded — consider smaller batches",
     "select-output-dir": "Select output directory",
     "select-folder": "Add Folder…",
-    "folder-hint": "Folder detected but subdirectory recursion is off. Enable \"Include subdirectories\" to process images inside.",
+    "folder-hint": "Subfolders skipped. Turn on Include Subfolders from the \u22ef menu to add them.",
     /* 目录行：后端把目录展开成若干实际文件，目录行自己收不到进度事件，
        这三句是它唯一的说明文字（见 app.js finalizeFolderRows）。 */
     "folder-files": "{n} file(s) inside",
@@ -170,6 +182,16 @@ const dict = {
     "fail": "失败",
     "saved": "节省",
     "start-convert": "开始转换",
+    "convert-n": "转换 {n} 张图片",
+    "add-images": "添加图片",
+    "confirm-recursive": "这个文件夹里还有子文件夹，要连里面的图片一起转换吗？",
+    "mi-clear-all": "清空全部",
+    "mi-include-subfolders": "包含子文件夹",
+    "mi-remove-originals": "转换后删除原图",
+    "section-size": "尺寸",
+    "section-batch": "本批",
+    "section-images": "图片数",
+    "section-source": "原始体积",
     /* 2026-10-30 状态栏 / 瓦片重构新增（与 en 块一一对应） */
     "statusbar-idle": "拖入图片即可开始 · 全程本机处理，不上传",
     "statusbar-ready": "已选择 {n} 个文件，就绪",
@@ -198,7 +220,7 @@ const dict = {
     "batch-warn": "已添加 {n} 个文件，建议分批处理",
     "select-output-dir": "选择输出目录",
     "select-folder": "添加文件夹…",
-    "folder-hint": "检测到文件夹，但未开启递归子目录。勾选「递归子目录」以处理其中的图片。",
+    "folder-hint": "已跳过子文件夹。需要时从 \u22ef 菜单开启「包含子文件夹」。",
     "folder-files": "内含 {n} 个文件",
     "folder-files-failed": "内含 {n} 个文件 · {m} 个失败",
     "folder-empty": "内无可转换文件",

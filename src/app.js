@@ -9,6 +9,7 @@ import {
 } from "./license.js";
 import { DIALOG_IMAGE_EXTENSIONS } from "./formats.js";
 import { hideProgressUi, resetResultUi } from "./result-ui.js";
+import { initQuickLook } from "./quicklook.js";
 
 // ─── State ──────────────────────────────────────────────────────────
 
@@ -16,7 +17,6 @@ let files = [];
 let selectedDir = null;
 let isConverting = false;
 let stats = null;
-let namingMode = "webp-suffix";
 const BATCH_WARN_COUNT = 200;
 const LARGE_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
@@ -32,37 +32,48 @@ function esc(s) {
   }[c]));
 }
 
-const dropzone = $("#dropzone");
+const gridArea = $("#grid-area");
 const fileList = $("#file-list");
 const fileCountText = $("#file-count-text");
 const clearBtn = $("#clear-btn");
+
+// 质量：一个系统下拉同时表达档位与有损/无损 —— "lossless" 是第四项，
+// 不再是「三颗药丸 + 一个独立开关」的两套控件表达同一件事。
 let qualityValue = 80;
-const qualityVal = $("#quality-val");
-const chkRecursive = $("#chk-recursive");
-const chkDelete = $("#chk-delete");
-const outputDir = $("#output-dir");
-const dirBtn = $("#dir-btn");
-const dirClear = $("#dir-clear");
-const namingPills = $("#naming-pills");
+let lossless = false;
+const qualityMenu = $("#quality-menu");
+// 命名固定为「只换扩展名」：IMG_2041.tif → IMG_2041.webp。
+// 四个药丸（overwrite / -webp / -q80 / 时间戳）已移除；撞名在转换前确认。
+const namingMode = "basename";
+// 递归与删源不再是常驻开关：前者在拖入文件夹时问一次，后者在 ⋯ 菜单里显式开启。
+// 一个静默生效的全局开关，惩罚的是记性而不是操作 —— 这是它们被拿掉的原因。
+let recursiveWanted = false;
+let deleteSourceWanted = false;
+
 const convertBtn = $("#convert-btn");
 const btnText = $("#btn-text");
 const btnSpinner = $("#btn-spinner");
-const statsPanel = $("#stats-panel");
 const statSuccess = $("#stat-success");
 const statSkip = $("#stat-skip");
 const statFail = $("#stat-fail");
 const statSaved = $("#stat-saved");
+const inspImages = $("#insp-images");
+const inspSource = $("#insp-source");
 
 const langToggle = $("#lang-toggle");
 const themeToggle = $("#theme-toggle");
-const chkLossless = $("#chk-lossless");
 const chkResize = $("#chk-resize");
 const resizeW = $("#resize-w");
 const resizeH = $("#resize-h");
 const resizeMode = $("#resize-mode");
-const chkStructure = $("#chk-structure");
 
-// 状态栏（2026-10-30 重构：状态文字必须与真实状态一致，见 updateStatusbar）
+const inspector = $("#inspector");
+const inspectorBtn = $("#inspector-btn");
+const pathBtn = $("#path-btn");
+const pathText = $("#path-text");
+const moreBtn = $("#more-btn");
+
+// 状态与红点（三档：待机静态 / 转换中呼吸 / 完成收束，见 syncDot）
 const statusDot = $("#status-dot");
 const statusText = $("#status-text");
 const statusMeta = $("#status-meta");
@@ -73,12 +84,14 @@ function buildRequest(fileList, { recursive, baseDir } = {}) {
   return {
     files: fileList,
     quality: qualityValue,
-    recursive: recursive ?? chkRecursive.checked,
-    delete_source: chkDelete.checked,
+    recursive: recursive ?? recursiveWanted,
+    delete_source: deleteSourceWanted,
     naming_mode: namingMode,
     output_dir: selectedDir || null,
-    lossless: chkLossless?.checked ?? false,
-    preserve_structure: chkStructure?.checked ?? false,
+    lossless,
+    // 递归时保持目录结构：目标目录没设时输出仍在源目录，结构自然一致；
+    // 设了目录才有意义，所以两者绑定。
+    preserve_structure: recursiveWanted && !!selectedDir,
     resize_enabled: chkResize?.checked ?? false,
     resize_width: resizeW ? parseInt(resizeW.value) || null : null,
     resize_height: resizeH ? parseInt(resizeH.value) || null : null,
@@ -137,8 +150,29 @@ async function addFiles(paths) {
   if (skippedExt.length > 0) showUnsupportedHint(skippedExt);
   // Best-effort fetch file sizes for large-file detection
   fetchFileSizes();
-  checkFolderHint(paths);
-  dropzone.classList.remove("empty");
+  await maybeAskRecursion(paths);
+}
+
+/**
+ * 拖入文件夹时问一次「要不要连子文件夹一起转」。
+ *
+ * 以前这是一个常驻在右栏的 toggle：用户打开过一次就永久生效，之后每次拖文件夹
+ * 都静默递归，连他自己都不记得。改成「放进来的那一刻问一句」，同一件事只在
+ * 需要它的上下文里出现。⋯ 菜单仍留一个开关兜底。
+ */
+async function maybeAskRecursion(paths) {
+  if (!isTauri() || recursiveWanted) return;
+  let hasFolder = false;
+  for (const p of paths) {
+    try {
+      if (await invoke("is_dir", { path: p })) { hasFolder = true; break; }
+    } catch (_) { /* 单条查询失败不影响其余 */ }
+  }
+  if (!hasFolder) return;
+  const yes = await ask(t("confirm-recursive"), { title: "Pic2WebP", kind: "question" });
+  recursiveWanted = !!yes;
+  const hint = document.getElementById("folder-hint");
+  if (hint) hint.hidden = !!yes;
 }
 
 // 在文件列表顶部显示一条临时提示：拖入了不支持的文件。
@@ -157,33 +191,12 @@ function showUnsupportedHint(skipped) {
   warn.id = "batch-warning";
   warn.className = "hint warn";
   warn.textContent = text;
-  const header = document.querySelector(".file-list-header");
+  const header = document.querySelector(".list-head");
   if (header) header.insertAdjacentElement("afterend", warn);
 }
 
-async function checkFolderHint(paths) {
-  if (chkRecursive.checked) {
-    const hint = document.getElementById("folder-hint");
-    if (hint) hint.hidden = true;
-    return;
-  }
-  if (!isTauri()) return;
-  for (const p of paths) {
-    try {
-      const isFolder = await invoke("is_dir", { path: p });
-      if (isFolder) {
-        const hint = document.getElementById("folder-hint");
-        if (hint) hint.hidden = false;
-        return;
-      }
-    } catch (_) {
-      // Ignore and continue checking other paths
-    }
-  }
-}
-
 function computeBaseDir(fileList) {
-  if (!chkStructure?.checked) return null;
+  if (!recursiveWanted) return null;
   if (fileList.length === 0) return null;
   const firstParent = fileList[0].path.split(/[/\\]/).slice(0, -1).join('/');
   const allSame = fileList.every((f) => {
@@ -355,21 +368,32 @@ function renderFiles() {
   fileList.innerHTML = "";
 
   if (files.length === 0) {
+    // 空态结构必须与 index.html 首帧一致 —— 否则首次拖入再清空会换一张脸
     fileList.innerHTML = `
       <div class="empty-state" id="empty-state">
-        <p class="empty-hint" data-i18n="empty-hint">${t("empty-hint")}</p>
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+            <circle cx="8.5" cy="8.5" r="1.6"/>
+            <path d="M21 15l-5-5-9 9"/>
+          </svg>
+        </div>
+        <p class="empty-hint" data-i18n="empty-hint">${esc(t("empty-hint"))}</p>
+        <small data-i18n="dropzone-hint">${esc(t("dropzone-hint"))}</small>
       </div>`;
     fileCountText.textContent = t("file-count", { n: files.length });
     clearBtn.hidden = true;
-    dropzone.classList.add("empty");
+    fileList.classList.add("is-empty");
     updateFileSummary();
     updateStatusbar();
     updateStatusMeta();
+    updateInspector();
     return;
   }
 
   fileCountText.textContent = t("file-count", { n: files.length });
   clearBtn.hidden = false;
+  fileList.classList.remove("is-empty");
 
   for (const f of files) {
     if (!f.path || typeof f.path !== "string") continue;
@@ -444,9 +468,18 @@ function renderFiles() {
     }
   }
 
+  // 网格末尾的「＋」：加图入口兼拖放落点。它随列表一起重绘，点击走
+  // fileList 上的事件委托，不逐个绑。
+  const addTile = document.createElement("button");
+  addTile.type = "button";
+  addTile.className = "add-tile";
+  addTile.innerHTML = `<span class="plus">＋</span><span>${esc(t("add-images"))}</span>`;
+  fileList.appendChild(addTile);
+
   updateFileSummary();
   updateStatusbar();
   updateStatusMeta();
+  updateInspector();
 }
 
 // ─── 状态栏 / 列表摘要：只说真实状态 ─────────────────────────────────
@@ -484,15 +517,36 @@ function updateFileSummary() {
   fileSummary.textContent = parts.join(" · ");
 }
 
+/**
+ * 红点三档状态 —— 全窗口唯一持续动的元素。
+ *
+ * 待机：静态常亮（品牌签名在，但不呼吸、不抢注意力）
+ * 转换中：2.4s 呼吸（曲线在 macos.css .dot-live）
+ * 完成：480ms 收束回 1.00，然后回到待机静止
+ *
+ * 三档都只动 opacity，且 prefers-reduced-motion 下全静态（状态交给进度条与文案）。
+ */
+function syncDot(busy) {
+  if (!statusDot) return;
+  statusDot.hidden = false;
+  statusDot.classList.toggle("idle", !busy);
+}
+
+function settleDot() {
+  if (!statusDot) return;
+  statusDot.classList.add("settle");
+  setTimeout(() => statusDot.classList.remove("settle"), 480);
+}
+
 function updateStatusbar() {
   if (!statusText) return;
   if (isConverting) {
     const { done, total } = batchTerminalCount();
-    if (statusDot) statusDot.hidden = false;
+    syncDot(true);
     statusText.textContent = t("statusbar-converting", { done, total });
     return;
   }
-  if (statusDot) statusDot.hidden = true;
+  syncDot(false);
   if (files.length === 0) {
     statusText.textContent = t("statusbar-idle");
     return;
@@ -514,13 +568,28 @@ function updateStatusbar() {
 // 状态栏右侧等宽摘要：当前质量档 · 有损/无损 · 本机处理（全部是真实设置）
 function updateStatusMeta() {
   if (!statusMeta) return;
-  const q = document.querySelector("#quality-pills .pill-btn.active");
-  const parts = [
-    q ? q.textContent.trim() : "",
-    chkLossless?.checked ? t("lossless") : t("lossy"),
-    t("statusbar-local"),
-  ];
+  const q = qualityMenu?.selectedOptions?.[0]?.textContent?.trim() || "";
+  const parts = [q];
+  // 选了 Lossless 时档位文字本身就是「无损」，不必再说一遍
+  if (!lossless) parts.push(t("lossy"));
+  parts.push(t("statusbar-local"));
   statusMeta.textContent = parts.filter(Boolean).join(" · ");
+}
+
+/**
+ * 检查器里的批次摘要：只写真实数字。
+ *
+ * 刻意**不做**体积预测 —— 预测值算不准就是假数字，而家族吃过「幽灵状态」
+ * 的亏（状态文字必须与真实状态一致）。Source 是已经读到的真实字节数，
+ * Saved / Done / Skip / Failed 来自后端 stats。
+ */
+function updateInspector() {
+  if (inspImages) inspImages.textContent = String(files.length);
+  if (!inspSource) return;
+  const known = files.filter((f) => f.size > 0);
+  inspSource.textContent = known.length === 0
+    ? "—"
+    : formatBytes(known.reduce((sum, f) => sum + f.size, 0));
 }
 
 function statusLabel(s) {
@@ -719,8 +788,11 @@ function updateProgress() {
     container.hidden = false;
     fill.style.width = pct + "%";
     text.textContent = `${done}/${total} (${pct}%)`;
+    // 切走窗口后由 Dock 接力说明「还在跑」
+    setDockProgress(pct);
   } else {
     hideProgressUi({ container, fill, text });
+    setDockProgress(null);
   }
   updateStatusbar();
 }
@@ -741,7 +813,6 @@ let retryBase = null;
 
 function updateStats(s) {
   stats = s;
-  statsPanel.hidden = false;
   const b = retryBase || { success_count: 0, skip_count: 0, fail_count: 0, saved: 0 };
   statSuccess.textContent = (b.success_count || 0) + (s.success_count || 0);
   statSkip.textContent = (b.skip_count || 0) + (s.skip_count || 0);
@@ -770,11 +841,11 @@ function updateConvertBtn() {
   }
 
   const allDone = files.every((f) => f.status === "done" || f.status === "skipped" || f.status === "failed");
-  if (allDone && files.length > 0) {
-    btnText.textContent = t("re-convert");
-  } else {
-    btnText.textContent = t("start-convert");
-  }
+  // 动词 + 数量 + 结果：按钮自己说清「按下去会发生什么」，
+  // 不再是一个孤零零的 "Convert" 要用户去数列表。
+  btnText.textContent = allDone
+    ? t("re-convert")
+    : t("convert-n", { n: files.length });
 
   convertBtn.disabled = false;
 }
@@ -794,8 +865,9 @@ async function startConvert() {
   totalTasks = 0; // 后端 convert-total 事件会填上真实总数
   resetBatchLedger();
 
-  // P0-3: Confirm before deleting source files
-  if (chkDelete.checked) {
+  // 删源不再是静默开关：⋯ 菜单里开启时已经确认过一次，这里再兜一道，
+  // 因为「拖了一批进来又点了转换」和「开启开关」之间可能隔了很久。
+  if (deleteSourceWanted) {
     const yes = await ask(t("confirm-delete"), { title: "Pic2WebP", kind: "warning" });
     if (!yes) return;
   }
@@ -817,7 +889,6 @@ async function startConvert() {
   renderFiles();
 
   stats = null;
-  statsPanel.hidden = true;
   const retryAllBtn = document.getElementById("retry-all-btn");
   if (retryAllBtn) retryAllBtn.hidden = true;
 
@@ -952,50 +1023,30 @@ async function retryAllFailed() {
 
 // ─── Event listeners ────────────────────────────────────────────────
 
-dropzone.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  dropzone.classList.add("dragover");
-});
-
-dropzone.addEventListener("dragleave", () => {
-  dropzone.classList.remove("dragover");
-});
-
-dropzone.addEventListener("drop", async (e) => {
-  e.preventDefault();
-  dropzone.classList.remove("dragover");
-  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-    const paths = Array.from(e.dataTransfer.files)
-      .map((f) => f.path)
-      .filter(Boolean);
-    if (paths.length > 0) await addFiles(paths);
-  }
-});
-
-// 键盘可达：Tab 聚焦拖放区后 Enter/Space 打开文件选择器（原为纯 div，键盘用户无法添加文件）
-dropzone.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-    e.preventDefault();
-    dropzone.click();
-  }
-});
-
-dropzone.addEventListener("click", async () => {
+/**
+ * 打开文件选择器。
+ *
+ * 拖放横幅在 2026-11-07 的重设计里被整个拿掉 —— 拖放走的是窗口级
+ * `tauri://drag-drop`，不是绑在某个元素上的，所以整个窗口天然就是投放区，
+ * 不需要一条专门的横幅。但这个「点一下选文件」的入口必须留住：键盘用户、
+ * 以及只想鼠标点一下的人都靠它。
+ */
+async function pickFiles() {
   try {
     const result = await open({
       multiple: true,
-      filters: [
-        { name: "Images", extensions: DIALOG_IMAGE_EXTENSIONS }
-      ]
+      filters: [{ name: "Images", extensions: DIALOG_IMAGE_EXTENSIONS }],
     });
-    if (result && Array.isArray(result)) {
-      await addFiles(result);
-    } else if (typeof result === "string") {
-      await addFiles([result]);
-    }
+    if (result && Array.isArray(result)) await addFiles(result);
+    else if (typeof result === "string") await addFiles([result]);
   } catch (e) {
     console.warn("Dialog not available:", e);
   }
+}
+
+// 空态整块与网格末尾的「＋」都是投放/选择入口
+fileList.addEventListener("click", (e) => {
+  if (e.target.closest(".empty-state, .add-tile")) pickFiles();
 });
 
 /**
@@ -1013,7 +1064,6 @@ function clearAllFiles() {
   totalTasks = 0;
   resetBatchLedger();
   resetResultUi({
-    statsPanel,
     progress: progressPorts(),
     stats: { success: statSuccess, skip: statSkip, fail: statFail, saved: statSaved },
     retryAllBtn: document.getElementById("retry-all-btn"),
@@ -1028,42 +1078,26 @@ clearBtn.addEventListener("click", () => {
   clearAllFiles();
 });
 
-// Quality presets — update value + q-suffix pill label (no slider)
-function setQuality(v) {
-  qualityValue = Math.max(10, Math.min(100, parseInt(v) || 80));
-  qualityVal.textContent = qualityValue;
-  const qPill = namingPills.querySelector('[data-value="q-suffix"]');
-  if (qPill) qPill.textContent = `-q${qualityValue}`;
-  document.querySelectorAll("#quality-pills .pill-btn").forEach((b) => {
-    b.classList.toggle("active", parseInt(b.dataset.q) === qualityValue);
-  });
+/**
+ * 质量下拉：一个控件同时表达「档位 + 有损/无损」。
+ *
+ * "lossless" 是第四项，而不是「三颗药丸 + 一个独立开关」——后者用两套控件
+ * 表达同一件事，还留下一个不可能状态（选了 60 又开无损）。无损在 WebP 里
+ * 就是另一条编码路径，质量参数对它没有意义。
+ */
+function applyQualityMenu() {
+  const v = qualityMenu.value;
+  if (v === "lossless") {
+    lossless = true;
+    qualityValue = 80;
+  } else {
+    lossless = false;
+    qualityValue = Math.max(10, Math.min(100, parseInt(v, 10) || 80));
+  }
   updateStatusMeta();
 }
-
-document.querySelectorAll("#quality-pills .pill-btn").forEach((b) => {
-  b.addEventListener("click", () => setQuality(b.dataset.q));
-});
-
-chkRecursive.addEventListener("change", () => {
-  if (chkRecursive.checked) {
-    const hint = document.getElementById("folder-hint");
-    if (hint) hint.hidden = true;
-  }
-});
-
-// 无损开关影响状态栏的「有损/无损」摘要
-chkLossless?.addEventListener("change", updateStatusMeta);
-
-// Naming mode — pill buttons
-namingPills.querySelectorAll(".pill-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    namingPills.querySelectorAll(".pill-btn").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    namingMode = btn.dataset.value;
-    const warn = document.getElementById("overwrite-warning");
-    if (warn) warn.hidden = namingMode !== "overwrite";
-  });
-});
+qualityMenu.addEventListener("change", applyQualityMenu);
+applyQualityMenu();
 
 // Output dir —— 记住上次选择（localStorage），不必每次开应用重选
 /* 2026-10-04 键改名：此前是 "pic2webp-output-dir"，压根不在家族命名空间里。
@@ -1071,25 +1105,29 @@ namingPills.querySelectorAll(".pill-btn").forEach((btn) => {
 const OUTPUT_DIR_KEY = "rocktier.output-dir";
 const OUTPUT_DIR_KEY_LEGACY = "pic2webp-output-dir";
 
+/**
+ * 输出位置：底栏上的一行路径摘要，不再是只读输入框 + Browse 按钮。
+ * ⌥ 点击清空回落到「与源文件同目录」，省掉一个常驻的 ✕。
+ */
 function applyOutputDir(dir) {
   selectedDir = dir || null;
-  outputDir.value = dir || "";
-  dirClear.hidden = !dir;
+  if (pathText) {
+    pathText.textContent = dir || t("same-dir");
+    pathText.title = dir || t("same-dir");
+  }
+  pathBtn?.classList.toggle("is-custom", !!dir);
   if (dir) localStorage.setItem(OUTPUT_DIR_KEY, dir);
   else localStorage.removeItem(OUTPUT_DIR_KEY);
 }
 
-dirBtn.addEventListener("click", async () => {
+pathBtn?.addEventListener("click", async (e) => {
+  if (e.altKey && selectedDir) { applyOutputDir(null); return; }
   try {
     const dir = await open({ directory: true, title: t("select-output-dir") });
     if (dir) applyOutputDir(dir);
-  } catch (e) {
-    console.log("Dialog not available:", e);
+  } catch (err) {
+    console.log("Dialog not available:", err);
   }
-});
-
-dirClear.addEventListener("click", () => {
-  applyOutputDir(null);
 });
 
 convertBtn.addEventListener("click", () => {
@@ -1174,11 +1212,16 @@ async function setupListeners() {
       retryAllBtn.hidden = (event.payload.fail_count === 0);
     }
     // Pulse the stats panel to draw attention to results
-    statsPanel.classList.add("pulse");
-    setTimeout(() => statsPanel.classList.remove("pulse"), 1000);
+    if (inspector) {
+      inspector.classList.add("pulse");
+      setTimeout(() => inspector.classList.remove("pulse"), 1000);
+    }
+    // 红点收束：从呼吸回到常亮，一次 480ms，不是硬切
+    settleDot();
     // 批次已经落定：进度条必须当场收起。此前这里只把 isConverting 置 false，
     // 没人再调 updateProgress()，于是 `4/4 (100%)` 一直挂到下次转换（D-121）。
     updateProgress();
+    setDockProgress(null);
   });
 }
 
@@ -1292,7 +1335,112 @@ if (langToggle) {
     // Re-render file list to update dynamic text
     renderFiles();
     updateConvertBtn();
+    // 底栏路径摘要没有 data-i18n（自定义目录不该被语言切换覆盖），这里补一次
+    applyOutputDir(selectedDir);
   });
+}
+
+// ─── 检查器 / ⋯ 菜单 / Dock 进度 ────────────────────────────────────
+
+/**
+ * 检查器开合。默认收起：主界面只留质量、网格、主操作三样，
+ * 尺寸这类「当前这批的属性」按需展开（⌥⌘I）。
+ */
+function setInspector(open) {
+  if (!inspector) return;
+  inspector.hidden = !open;
+  inspectorBtn?.setAttribute("aria-pressed", String(open));
+  try { localStorage.setItem("rocktier.inspector", open ? "1" : "0"); } catch (_) {}
+}
+inspectorBtn?.addEventListener("click", () => setInspector(inspector.hidden));
+
+/**
+ * ⋯ 菜单：放不进主界面、又不该消失的动作。
+ *
+ * 这里只放三类：破坏性的（清空、删源）、一次性的上下文开关（包含子文件夹）、
+ * 以及低频入口（检查更新）。⚠️ 删源每次开启都要用户亲手确认，不做「记住了」——
+ * 静默生效的全局开关，惩罚的是记性而不是操作。
+ */
+function closeMoreMenu() {
+  const m = document.getElementById("more-menu");
+  if (m) m.remove();
+  document.removeEventListener("mousedown", onMoreMenuOutside, true);
+  document.removeEventListener("keydown", onMoreMenuKey, true);
+}
+function onMoreMenuOutside(e) {
+  if (!e.target.closest("#more-menu") && !e.target.closest("#more-btn")) closeMoreMenu();
+}
+function onMoreMenuKey(e) {
+  if (e.key === "Escape") { e.preventDefault(); closeMoreMenu(); }
+}
+
+function openMoreMenu() {
+  if (document.getElementById("more-menu")) { closeMoreMenu(); return; }
+  const menu = document.createElement("div");
+  menu.id = "more-menu";
+  menu.className = "popup-menu";
+  menu.setAttribute("role", "menu");
+
+  const item = (label, opts = {}) => {
+    const b = document.createElement("button");
+    b.className = "popup-item" + (opts.danger ? " danger" : "");
+    b.setAttribute("role", "menuitem");
+    b.textContent = label;
+    if (opts.checked !== undefined && opts.checked) {
+      const tick = document.createElement("span");
+      tick.className = "tick";
+      tick.textContent = "✓";
+      b.prepend(tick);
+    }
+    b.addEventListener("click", () => { closeMoreMenu(); opts.run?.(); });
+    return b;
+  };
+
+  menu.append(
+    item(t("mi-clear-all"), { run: () => clearAllFiles() }),
+    item(t("mi-include-subfolders"), {
+      checked: recursiveWanted,
+      run: () => { recursiveWanted = !recursiveWanted; updateStatusMeta(); },
+    }),
+    item(t("mi-remove-originals"), {
+      checked: deleteSourceWanted,
+      danger: true,
+      run: () => { deleteSourceWanted = !deleteSourceWanted; },
+    }),
+  );
+  const sep = document.createElement("div");
+  sep.className = "popup-sep";
+  menu.append(sep, item(t("update.check"), { run: () => runUpdateCheck() }));
+
+  document.body.appendChild(menu);
+  const r = moreBtn.getBoundingClientRect();
+  menu.style.top = `${Math.round(r.bottom + 6)}px`;
+  menu.style.left = `${Math.round(Math.max(8, r.right - 200))}px`;
+
+  document.addEventListener("mousedown", onMoreMenuOutside, true);
+  document.addEventListener("keydown", onMoreMenuKey, true);
+}
+moreBtn?.addEventListener("click", openMoreMenu);
+
+/**
+ * Dock 图标下的进度条 —— 红点在窗口被遮住、最小化时什么都说明不了，
+ * 「正在干活」这件事得由系统层接着讲。Tauri 原生能力，不引入新控件。
+ * 权限缺失时静默降级（capabilities 里已补 core:window:allow-set-progress-bar）。
+ */
+let dockWindow = null;
+async function setDockProgress(percent) {
+  if (!isTauri()) return;
+  try {
+    if (!dockWindow) {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      dockWindow = getCurrentWindow();
+    }
+    await dockWindow.setProgressBar(
+      percent === null ? { status: "none" } : { progress: Math.round(percent) }
+    );
+  } catch (_) {
+    // 旧版 Tauri / 无该权限：不影响转换主流程
+  }
 }
 
 // ─── Init ────────────────────────────────────────────────────────────
@@ -1302,6 +1450,9 @@ async function init() {
   updateLangToggle();
   // 语言已就绪：此刻构建菜单才能用上用户保存的语言
   if (isTauri()) invoke("build_menu", { lang: getLang() }).catch(() => {});
+
+  // 检查器默认收起：主界面只留质量、网格、主操作；上次开着的就还是开着
+  setInspector(localStorage.getItem("rocktier.inspector") === "1");
 
   // 恢复上次的输出目录（目录后来被删掉也没关系：后端 create_dir_all 会建回来）
   const savedOutputDir = localStorage.getItem(OUTPUT_DIR_KEY) ?? localStorage.getItem(OUTPUT_DIR_KEY_LEGACY);
@@ -1329,6 +1480,9 @@ async function init() {
 
   await setupListeners();
 
+  // 空格预览：读的是实时 files 数组，不是渲染时快照
+  initQuickLook({ getPaths: () => files.map((f) => f.path) });
+
   // 授权（家族 L6）：启动拉状态更新胶囊；订阅 license-expired 开激活对话框
   initLicense();
 
@@ -1337,10 +1491,15 @@ async function init() {
   });
 
   await listen("tauri://drag-drop", async (event) => {
+    gridArea?.classList.remove("dragover");
     const raw = event.payload.paths || [];
     const paths = raw.map((p) => (typeof p === "string" ? p : p && p.path)).filter(Boolean);
     if (paths.length > 0) await addFiles(paths);
   });
+
+  // 拖拽悬停：整个窗口都是投放区，所以整块网格给反馈，不再只亮一个角
+  await listen("tauri://drag-enter", () => gridArea?.classList.add("dragover"));
+  await listen("tauri://drag-leave", () => gridArea?.classList.remove("dragover"));
 
   // 文件关联（双击 / 「打开方式」）：冷启动路径经 initial_file 拉取，热启动由
   // Rust 的 open-file 事件送达。addFiles 是拖放/选择框共用的装载入口

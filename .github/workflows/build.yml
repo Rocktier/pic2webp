@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  # 手动出测试包：特性分支也能产出 artifact，不必先把 main 弄脏。
+  # 只上传 artifact，不创建 release（release 仍只认 tag）。
+  workflow_dispatch:
 
 # crates.io 直连偶发超时，留重试余量
 env:
@@ -128,7 +131,7 @@ jobs:
       #  测试构建产物上传 (main 分支)
       # ──────────────────────────────────────────────
       - name: Upload artifact (macOS)
-        if: github.ref == 'refs/heads/main' && matrix.os == 'macos'
+        if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') && matrix.os == 'macos'
         uses: actions/upload-artifact@v4
         with:
           name: Pic2WebP-macos-${{ matrix.arch }}
@@ -136,7 +139,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload artifact (Windows)
-        if: github.ref == 'refs/heads/main' && matrix.os == 'windows'
+        if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') && matrix.os == 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: Pic2WebP-windows-x64
