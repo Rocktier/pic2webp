@@ -7,6 +7,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   initLicense, openLicenseDialog, isLicenseDialogOpen, isLicenseExpiredError,
 } from "./license.js";
+import { DIALOG_IMAGE_EXTENSIONS } from "./formats.js";
+import { hideProgressUi, resetResultUi } from "./result-ui.js";
 
 // ─── State ──────────────────────────────────────────────────────────
 
@@ -97,7 +99,9 @@ function formatBytes(bytes, decimals = 1) {
 
 // ─── Add files ───────────────────────────────────────────────────────
 
-const SUPPORTED_EXTS = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
+// 白名单只有一份，在 formats.js（对话框 filters 与这里的导入校验共用）。
+// 曾经是两份各写一遍、都漏了 `.tif`：面板里 .tif 是灰的，硬拖进来也会被
+// 当成「不支持的格式」弹提示 —— 两个环节都挡，而且两处都要改才修得掉。
 
 function fileExt(p) {
   const name = p.split(/[/\\]/).pop() || "";
@@ -114,7 +118,7 @@ async function addFiles(paths) {
     if (isTauri()) {
       try { isFolder = await invoke("is_dir", { path: p }); } catch (_) {}
     }
-    if (!isFolder && !SUPPORTED_EXTS.includes(fileExt(p))) {
+    if (!isFolder && !DIALOG_IMAGE_EXTENSIONS.includes(fileExt(p))) {
       skippedExt.push(p);
       continue;
     }
@@ -707,9 +711,7 @@ function batchTerminalCount() {
 }
 
 function updateProgress() {
-  const container = document.getElementById("progress-bar-container");
-  const fill = document.getElementById("progress-bar-fill");
-  const text = document.getElementById("progress-text");
+  const { container, fill, text } = progressPorts();
   if (!container || !fill || !text) return;
   if (isConverting) {
     const { done, total } = batchTerminalCount();
@@ -718,10 +720,18 @@ function updateProgress() {
     fill.style.width = pct + "%";
     text.textContent = `${done}/${total} (${pct}%)`;
   } else {
-    container.hidden = true;
-    fill.style.width = "0%";
+    hideProgressUi({ container, fill, text });
   }
   updateStatusbar();
+}
+
+/** 进度条三个节点：转换中反复读写，收尾时整组交出去清。 */
+function progressPorts() {
+  return {
+    container: document.getElementById("progress-bar-container"),
+    fill: document.getElementById("progress-bar-fill"),
+    text: document.getElementById("progress-text"),
+  };
 }
 
 // ─── Update stats ───────────────────────────────────────────────────
@@ -975,7 +985,7 @@ dropzone.addEventListener("click", async () => {
     const result = await open({
       multiple: true,
       filters: [
-        { name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"] }
+        { name: "Images", extensions: DIALOG_IMAGE_EXTENSIONS }
       ]
     });
     if (result && Array.isArray(result)) {
@@ -988,14 +998,34 @@ dropzone.addEventListener("click", async () => {
   }
 });
 
-clearBtn.addEventListener("click", () => {
+/**
+ * 清空列表 —— Clear 按钮与 ⌘⌫ 共用这一份。
+ *
+ * 此前是两份内联实现，两份都只清了统计面板、没清进度条，于是「转换完 → Clear」
+ * 之后右侧还挂着 `4/4 (100%)` 与旧数字，要重启应用才消失（D-121）。
+ * 收口成一个函数的目的是：以后加任何结果区元素，只有一个地方要改。
+ */
+function clearAllFiles() {
   files = [];
   stats = null;
-  statsPanel.hidden = true;
+  retryBase = null;
+  batchPaths = [];
+  totalTasks = 0;
+  resetBatchLedger();
+  resetResultUi({
+    statsPanel,
+    progress: progressPorts(),
+    stats: { success: statSuccess, skip: statSkip, fail: statFail, saved: statSaved },
+    retryAllBtn: document.getElementById("retry-all-btn"),
+  });
   const warn = document.getElementById("batch-warning");
   if (warn) warn.remove();
   renderFiles();
   updateConvertBtn();
+}
+
+clearBtn.addEventListener("click", () => {
+  clearAllFiles();
 });
 
 // Quality presets — update value + q-suffix pill label (no slider)
@@ -1097,15 +1127,7 @@ document.addEventListener("keydown", (e) => {
   
   // Cmd+Backspace clear all files
   if ((e.metaKey || e.ctrlKey) && e.key === "Backspace") {
-    if (files.length > 0) {
-      files = [];
-      stats = null;
-      statsPanel.hidden = true;
-      const warn = document.getElementById("batch-warning");
-      if (warn) warn.remove();
-      renderFiles();
-      updateConvertBtn();
-    }
+    if (files.length > 0) clearAllFiles();
   }
 });
 
@@ -1154,6 +1176,9 @@ async function setupListeners() {
     // Pulse the stats panel to draw attention to results
     statsPanel.classList.add("pulse");
     setTimeout(() => statsPanel.classList.remove("pulse"), 1000);
+    // 批次已经落定：进度条必须当场收起。此前这里只把 isConverting 置 false，
+    // 没人再调 updateProgress()，于是 `4/4 (100%)` 一直挂到下次转换（D-121）。
+    updateProgress();
   });
 }
 

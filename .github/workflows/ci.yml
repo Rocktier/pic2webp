@@ -4,7 +4,8 @@ name: Checks
 # 手动触发，push 不跑类型检查、单测与 clippy —— 付费墙（license/trial）的
 # 改动从未过 Rust 质量门（2026-10-19~20 grill-me 找茬 A1，用户第一性原则
 # 拍板修复）。本文件把 MD 仓同配方（纯 Tauri、无 Go engine）的 Tests & Lints
-# 作业挂到 push；配方差异仅：pic2webp 无 npm test 脚本，前端侧只跑 build。
+# 作业挂到 push；配方差异仅：前端侧此前只跑 build，没有单测（2026-11-07 补上
+# tests/ 与 npm test —— 起因是两个只在前端发生、Rust 侧完全看不见的 bug）。
 
 on:
   push:
@@ -38,6 +39,10 @@ jobs:
         run: npm ci
       - name: Type check + build
         run: npm run build
+      - name: Frontend tests
+        # tests/ 是纯 node:test，零依赖、不起浏览器：判据盯着「白名单与后端能力一致」
+        # 和「结果区收尾有没有接上」这两类 Rust 侧看不见、UI 上才暴露的问题。
+        run: npm test
       - name: Rust tests + clippy
         run: |
           cargo test --manifest-path src-tauri/Cargo.toml

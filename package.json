@@ -11,6 +11,7 @@
     "tauri": "tauri",
     "tauri:windows:build": "tauri-windows-bundle build --runner npm",
     "build:release": "bash scripts/build-and-sign.sh",
+    "test": "node --test tests/formats.test.mjs tests/result-ui.test.mjs tests/wiring.test.mjs",
     "family:check": "node scripts/family-check.mjs --self --product pic2webp"
   },
   "dependencies": {
