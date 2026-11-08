@@ -26,7 +26,7 @@
 | ⏹️ **一键取消** | 批量转换中途可随时取消 |
 | 🔄 **失败重试** | 单个文件转换失败后可单独重试 |
 | 🛠️ **原生 WebP 编码** | 内置 WebP 引擎，无需安装任何工具 |
-| 🔒 **完全离线** | 不发任何网络请求，不上传任何文件 |
+| 🔒 **本地处理** | 图片永不上传；断网可用，网络请求见「隐私」 |
 | 🌐 **中英双语** | 自动检测系统语言，一键切换 |
 | 🍎 **macOS 11+** | · | **Windows 10+** |
 
@@ -91,7 +91,19 @@ registry = "sparse+https://rsproxy.cn/index/"
 
 ## 🔒 隐私
 
-100% 本地工具。**不收集任何数据，不发起任何网络请求。**
+转换全在本机完成。图片、文件名、路径一概不上传；没有遥测、账号、云组件，也没有广告 SDK。
+
+**网络请求（仅官网直发版）**
+
+| 请求 | 触发 | 发送内容 |
+|---|---|---|
+| `POST https://rocktier.com/api/activate` | 输入激活码 | `code`、用于设备数限制的指纹、`os` |
+| `GET https://rocktier.com/api/revalidate?txn=...` | 已有回执时点「检查更新」 | 回执里本就有的交易号 |
+| `GET https://api.github.com/repos/Rocktier/pic2webp/releases/latest` | 点「检查更新」 | 无自定义字段，公开 API，不带 body 或 query |
+
+三个请求都不含图片数据、文件名或路径，也不会在启动或后台自动发生。全家族口径见[隐私政策](https://rocktier.com/privacy)。
+
+**Mac App Store 版**：购买由 Apple 处理，没有激活码、没有登录、没有试用。商店渠道（`ROCKTIER_CHANNEL=store`）不构建含「检查更新 / 官方网站」的 Help 菜单，上面三个请求都没有可触发入口，这个版本运行时不发起任何网络请求。
 
 ## 📄 协议
 
@@ -123,7 +135,7 @@ Reduce image size by 25-50% at quality 75-85
 | ⏹️ **Cancel anytime** | Stop batch conversion mid-process |
 | 🔄 **Retry failed** | Retry individual failed files |
 | 🛠️ **Native WebP** | Built-in encoder, no extra tools needed |
-| 🔒 **Fully offline** | No network requests, no uploads |
+| 🔒 **Local by default** | Images never uploaded; works offline, see Privacy for the request list |
 | 🌐 **Bilingual** | Auto-detect system language, one-click toggle |
 | 🍎 **macOS 11+** | · | **Windows 10+** |
 
@@ -168,7 +180,19 @@ npm run tauri build  # Production build
 
 ## 🔒 Privacy
 
-100% local tool. **No data collection, no network requests.**
+All conversion happens on your device. Your images, file names and paths are never uploaded. There is no telemetry, no account, no cloud component, and no advertising SDK.
+
+**Network requests (direct download only)**
+
+| Request | Triggered by | What it sends |
+|---|---|---|
+| `POST https://rocktier.com/api/activate` | You enter a license code | `code`, a device fingerprint for the activation limit, `os` |
+| `GET https://rocktier.com/api/revalidate?txn=...` | You click "Check for updates" while a receipt exists | The transaction id already in that receipt |
+| `GET https://api.github.com/repos/Rocktier/pic2webp/releases/latest` | You click "Check for updates" | Nothing custom - a public API with no body or query |
+
+None of these carries image data, file names or paths, and none runs at startup or in the background. See the [privacy policy](https://rocktier.com/privacy) for the family-wide wording.
+
+**Mac App Store build**: your purchase is handled by Apple, so there is no activation code, no sign-in and no trial. The Help menu (which holds "Check for updates" and "Website") is not built in the store channel (`ROCKTIER_CHANNEL=store`), so none of the requests above has a reachable trigger - that build makes no network requests at all.
 
 ## 📄 License
 
