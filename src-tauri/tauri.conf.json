@@ -77,11 +77,19 @@
         "mimeType": "image/bmp"
       },
       {
-        "ext": ["tiff"],
+        "ext": ["tif", "tiff"],
         "name": "Rocktier Image",
         "description": "Image to convert",
         "role": "Editor",
         "mimeType": "image/tiff"
+      },
+      {
+        "ext": ["heic", "heif"],
+        "name": "HEIC Image",
+        "description": "HEIC/HEIF image to convert",
+        "role": "Viewer",
+        "contentTypes": ["public.heic", "public.heif"],
+        "rank": "Alternate"
       }
     ],
     "resources": [

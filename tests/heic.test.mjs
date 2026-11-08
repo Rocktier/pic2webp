@@ -11,6 +11,11 @@
 //
 // 判据本身也做正反对照（准则 #11 / D-115）：完整仓库判绿，删掉任一环
 // 节必须判红，空目录必须判红（存在性断言不许在「没文件」时假绿）。
+//
+// 2026-11-08 追加（D-128）：真机双击 HEIC 报 -10820 才查出第四层缺口 ——
+// 解码、白名单、格式清单全对，但 bundle.fileAssociations 没声明 heic/heif，
+// Tauri 生成的 Info.plist / Windows 注册表里就没有这个类型。所以新增
+// 「白名单每种格式必须在系统文件关联里」的反向判据。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -33,6 +38,7 @@ const WATCHED = [
   "src-tauri/src/lib.rs",
   "src-tauri/src/heic.rs",
   "src-tauri/Cargo.toml",
+  "src-tauri/tauri.conf.json",
 ];
 
 function read(root, rel) {
@@ -57,6 +63,31 @@ function coverageIssues(root) {
   const i18n = read(root, "src/i18n.js");
   const features = enabledImageFeatures(cargo);
 
+  // ⓪ 系统文件关联（D-128 第四层）：Tauri 由 bundle.fileAssociations 生成
+  //    macOS Info.plist 的 CFBundleDocumentTypes 与 Windows 注册表。
+  //    源文件是 tauri.conf.json，**不是** src-tauri/Info.plist（那份只是
+  //    出口合规增量）。解析失败 / 整段缺失一律判红，不许静默跳过。
+  const conf = read(root, "src-tauri/tauri.conf.json");
+  const assocExts = new Set();
+  const assocTypes = new Set();
+  if (!conf) {
+    issues.push("缺 src-tauri/tauri.conf.json");
+  } else {
+    try {
+      const list = JSON.parse(conf)?.bundle?.fileAssociations;
+      if (!Array.isArray(list)) {
+        issues.push("bundle.fileAssociations 缺失或不是数组");
+      } else {
+        for (const a of list) {
+          for (const e of a.ext ?? []) assocExts.add(String(e).replace(/^\./, "").toLowerCase());
+          for (const c of a.contentTypes ?? []) assocTypes.add(String(c));
+        }
+      }
+    } catch (e) {
+      issues.push(`tauri.conf.json 解析失败：${e.message}`);
+    }
+  }
+
   // ① 白名单里的每种格式都要有解码实现 —— 反向判据本体。
   //    必须从 formats.js 的**源码**重新解析别名表：只 import 常量的话，
   //    临时红样例往文件里加一个 avif，判据读到的还是旧对象，会假绿。
@@ -70,6 +101,13 @@ function coverageIssues(root) {
     ]);
     for (const [canonical, aliases] of pairs) {
       if (aliases.length === 0) issues.push(`${canonical} 没有后缀`);
+      // 「选得到」还必须有「双击进得来」：白名单每个后缀都要在
+      // bundle.fileAssociations 里（D-128 真机 -10820 就是这么漏的）。
+      for (const ext of aliases) {
+        if (!assocExts.has(ext)) {
+          issues.push(`系统文件关联缺 .${ext}（${canonical}）—— 白名单能选中，双击/打开方式进不来`);
+        }
+      }
       if (features.includes(canonical)) continue;
       if (canonical !== "heic") {
         issues.push(`${canonical}（.${aliases.join(" / .")}）既不在 image features 里，也没有系统解码器`);
@@ -121,6 +159,12 @@ function coverageIssues(root) {
   }
   if (!i18n.includes("heic_codec_missing") || !i18n.includes('key: "msg-heic-codec-missing"')) {
     issues.push("后端错误码没接进 translateBackendMessage");
+  }
+
+  // ⑤ HEIC 的 UTI：macOS Launch Services 按 UTI 判类型，只写扩展名
+  //    不足以让「打开方式」认出 HEIC（测试副本手动补 plist 时两个都写了）。
+  for (const uti of ["public.heic", "public.heif"]) {
+    if (!assocTypes.has(uti)) issues.push(`HEIC 文件关联缺 UTI ${uti}`);
   }
   return issues;
 }
@@ -185,6 +229,24 @@ test("把 CLI 解码退回裸 ImageReader，判据必须判红", () => {
 test("SUPPORTED_EXTS 漏掉 heic，判据必须判红", () => {
   withFixture({ '"tif", "tiff", "heic", "heif"': '"tif", "tiff"' }, (root) => {
     assert.ok(coverageIssues(root).some((s) => s.includes("SUPPORTED_EXTS 缺")));
+  });
+});
+
+test("文件关联删掉 heic/heif，判据必须判红（D-128）", () => {
+  withFixture({ '"ext": ["heic", "heif"]': '"ext": []' }, (root) => {
+    assert.ok(coverageIssues(root).some((s) => s.includes("系统文件关联缺 .heic")));
+  });
+});
+
+test("文件关联只写扩展名不写 UTI，判据必须判红", () => {
+  withFixture({ '"contentTypes": ["public.heic", "public.heif"]': '"contentTypes": []' }, (root) => {
+    assert.ok(coverageIssues(root).some((s) => s.includes("缺 UTI public.heic")));
+  });
+});
+
+test("整个 fileAssociations 段被删，判据必须判红", () => {
+  withFixture({ '"fileAssociations": [': '"fileAssociations_REMOVED": [' }, (root) => {
+    assert.ok(coverageIssues(root).some((s) => s.includes("bundle.fileAssociations")));
   });
 });
 
